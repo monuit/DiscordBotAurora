@@ -1,5 +1,5 @@
 const { EmbedBuilder, PermissionsBitField, ChannelType } = require('discord.js');
-const { AutoWebScrapeSender } = require('../../Functions/AutoWebScrapeSender');
+const AutoWebScrapeSender = require('../../Functions/AutoWebScrapeSender');
 
 module.exports = {
     name: ["auto-create-channels"],
@@ -134,8 +134,11 @@ module.exports = {
         if (action === 'create') {
             await interaction.deferReply();
             
+            console.log(`[AUTO-CREATE] Starting channel creation for category ${categoryId}`);
+            
             const category = guild.channels.cache.get(categoryId);
             if (!category) {
+                console.log(`[AUTO-CREATE] Error: Category ${categoryId} not found`);
                 const errorEmbed = new EmbedBuilder()
                     .setColor("#ff0000")
                     .setTitle("❌ Category Not Found")
@@ -144,12 +147,27 @@ module.exports = {
                 return interaction.editReply({ embeds: [errorEmbed] });
             }
 
+            console.log(`[AUTO-CREATE] Found category: ${category.name}`);
+
             let createdCount = 0;
             const createdChannels = [];
             const skippedChannels = [];
-            const autoWebSender = new AutoWebScrapeSender();
+            const errors = [];
+            
+            console.log(`[AUTO-CREATE] Creating AutoWebScrapeSender instance`);
+            let autoWebSender;
+            try {
+                autoWebSender = new AutoWebScrapeSender(interaction.client);
+                console.log(`[AUTO-CREATE] AutoWebScrapeSender created successfully`);
+            } catch (error) {
+                console.error(`[AUTO-CREATE] Failed to create AutoWebScrapeSender:`, error);
+                errors.push(`AutoWebScrapeSender init: ${error.message}`);
+            }
+
+            console.log(`[AUTO-CREATE] Starting to process ${channelCategories.length} channels`);
 
             for (const channelData of channelCategories) {
+                console.log(`[AUTO-CREATE] Processing channel: ${channelData.name}`);
                 try {
                     // Check if channel already exists
                     const existingChannel = guild.channels.cache.find(ch => 
@@ -157,21 +175,24 @@ module.exports = {
                     );
                     
                     if (existingChannel) {
+                        console.log(`[AUTO-CREATE] Channel ${channelData.name} already exists, skipping creation`);
                         skippedChannels.push(channelData.name);
                         
                         // Still enable Redgifs for existing channel
-                        try {
-                            await autoWebSender.scheduleAutoPost(guild.id, existingChannel.id, {
-                                source: 'redgifs',
-                                category: channelData.category,
-                                interval: { min: 10, max: 30 }
-                            });
-                        } catch (error) {
-                            console.error(`Failed to enable Redgifs for existing channel ${channelData.name}:`, error);
+                        if (autoWebSender) {
+                            try {
+                                console.log(`[AUTO-CREATE] Enabling Redgifs for existing channel ${channelData.name}`);
+                                await autoWebSender.startAutoPost(existingChannel.id, 'redgifs', channelData.category, interaction.user.id);
+                                console.log(`[AUTO-CREATE] Redgifs enabled for existing channel ${channelData.name}`);
+                            } catch (error) {
+                                console.error(`[AUTO-CREATE] Failed to enable Redgifs for existing channel ${channelData.name}:`, error);
+                                errors.push(`Redgifs setup for ${channelData.name}: ${error.message}`);
+                            }
                         }
                         continue;
                     }
 
+                    console.log(`[AUTO-CREATE] Creating new channel: ${channelData.name}`);
                     // Create the channel
                     const newChannel = await guild.channels.create({
                         name: channelData.name,
@@ -182,33 +203,38 @@ module.exports = {
                         reason: 'Auto-created NSFW channel with Redgifs integration'
                     });
 
+                    console.log(`[AUTO-CREATE] Successfully created channel: ${channelData.name} (${newChannel.id})`);
                     createdChannels.push(channelData.name);
                     createdCount++;
 
                     // Enable Redgifs auto-posting for this channel
-                    try {
-                        await autoWebSender.scheduleAutoPost(guild.id, newChannel.id, {
-                            source: 'redgifs',
-                            category: channelData.category,
-                            interval: { min: 10, max: 30 }
-                        });
-                    } catch (error) {
-                        console.error(`Failed to enable Redgifs for ${channelData.name}:`, error);
+                    if (autoWebSender) {
+                        try {
+                            console.log(`[AUTO-CREATE] Enabling Redgifs for new channel ${channelData.name}`);
+                            await autoWebSender.startAutoPost(newChannel.id, 'redgifs', channelData.category, interaction.user.id);
+                            console.log(`[AUTO-CREATE] Redgifs enabled for new channel ${channelData.name}`);
+                        } catch (error) {
+                            console.error(`[AUTO-CREATE] Failed to enable Redgifs for ${channelData.name}:`, error);
+                            errors.push(`Redgifs setup for ${channelData.name}: ${error.message}`);
+                        }
                     }
 
                     // Rate limit protection
                     await new Promise(resolve => setTimeout(resolve, 1000));
                     
                 } catch (error) {
-                    console.error(`Failed to create channel ${channelData.name}:`, error);
+                    console.error(`[AUTO-CREATE] Failed to create channel ${channelData.name}:`, error);
+                    errors.push(`Channel creation for ${channelData.name}: ${error.message}`);
                     skippedChannels.push(`${channelData.name} (error)`);
                 }
             }
 
+            console.log(`[AUTO-CREATE] Completed processing. Created: ${createdCount}, Skipped: ${skippedChannels.length}, Errors: ${errors.length}`);
+
             const successEmbed = new EmbedBuilder()
-                .setColor("#00ff00")
+                .setColor(errors.length > 0 ? "#ff9900" : "#00ff00")
                 .setTitle("✅ Channel Creation Complete")
-                .setDescription(`Successfully created ${createdCount} new channels with Redgifs enabled!`)
+                .setDescription(`Created ${createdCount} new channels. ${errors.length > 0 ? `⚠️ ${errors.length} errors occurred.` : 'All operations successful!'}`)
                 .addFields({
                     name: "Created Channels",
                     value: createdChannels.length > 0 ? createdChannels.join('\n') : "None",
@@ -223,8 +249,17 @@ module.exports = {
                     name: "Features Enabled",
                     value: "• NSFW channels\n• Redgifs auto-posting\n• 10-30 minute intervals\n• API overlap prevention",
                     inline: false
-                })
-                .setTimestamp();
+                });
+
+            if (errors.length > 0) {
+                successEmbed.addFields({
+                    name: "Errors Encountered",
+                    value: errors.slice(0, 5).join('\n') + (errors.length > 5 ? `\n... and ${errors.length - 5} more` : ''),
+                    inline: false
+                });
+            }
+
+            successEmbed.setTimestamp();
 
             return interaction.editReply({ embeds: [successEmbed] });
         }

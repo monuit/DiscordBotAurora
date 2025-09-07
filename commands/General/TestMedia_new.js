@@ -1,8 +1,8 @@
 const { EmbedBuilder, PermissionsBitField } = require('discord.js');
 
 module.exports = {
-    name: ["testmedia"],
-    description: "Test X/Twitter and Redgifs content retrieval and posting",
+    name: ["testmedia-new"],
+    description: "Test X/Twitter and Redgifs content retrieval and posting (Enhanced Version)",
     type: "CHAT_INPUT",
     options: [
         {

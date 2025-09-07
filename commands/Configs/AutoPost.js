@@ -6,7 +6,10 @@ module.exports = {
     name: ["autopost"],
     description: "Configure auto-posting for various content categories",
     run: async (interaction, client) => {
-        await interaction.deferReply({ ephemeral: false });
+        // Only defer if not already replied to
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.deferReply({ ephemeral: false });
+        }
 
         // Check permissions
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
@@ -25,6 +28,8 @@ module.exports = {
 
         const categories = [
             { label: "Reddit Auto-Post", value: "reddit", description: "Auto-post from various Reddit communities", emoji: "🔥" },
+            { label: "Redgifs Auto-Post", value: "redgifs", description: "Auto-post from Redgifs (10-30 min intervals)", emoji: "🎬" },
+            { label: "X (Twitter) Auto-Post", value: "twitter", description: "Auto-post from X/Twitter (10-30 min intervals)", emoji: "🐦" },
             { label: "Amateur Content", value: "amateur", description: "Auto-post amateur content", emoji: "💖" },
             { label: "Asian Content", value: "asian", description: "Auto-post Asian content", emoji: "🌸" },
             { label: "MILF Content", value: "milf", description: "Auto-post MILF content", emoji: "👩" },
@@ -86,6 +91,82 @@ module.exports = {
                 
                 const selectedValue = i.values[0];
                 const selectedCategory = categories.find(cat => cat.value === selectedValue);
+
+                // Handle new web scraping auto-post options
+                if (selectedValue === 'redgifs' || selectedValue === 'twitter') {
+                    try {
+                        if (selectedValue === 'redgifs') {
+                            // Check if Redgifs is enabled
+                            if (process.env.ENABLE_REDGIFS !== 'true') {
+                                const disabledEmbed = new EmbedBuilder()
+                                    .setDescription("❌ Redgifs auto-posting is currently disabled in bot configuration.")
+                                    .setColor("#ff0000");
+                                return await i.editReply({ embeds: [disabledEmbed], components: [] });
+                            }
+
+                            // Start Redgifs auto-posting with default category
+                            if (client.autoWebScrapeSender) {
+                                await client.autoWebScrapeSender.startRedgifsPosting(interaction.channel.id, 'amateur');
+                                
+                                const enabledEmbed = new EmbedBuilder()
+                                    .setTitle("🎬 Redgifs Auto-Posting Started")
+                                    .setDescription(`✅ **Redgifs auto-posting** enabled for ${interaction.channel}\n\n` +
+                                                   `📂 **Category:** Amateur (default)\n` +
+                                                   `⏰ **Interval:** 3-10 minutes (random)\n` +
+                                                   `🎯 **Source:** Redgifs API\n\n` +
+                                                   `💡 **Tip:** Use \`/auto-redgifs action:start\` to select specific categories!`)
+                                    .setColor("#00ff00")
+                                    .setTimestamp();
+                                
+                                await i.editReply({ embeds: [enabledEmbed], components: [] });
+                                collector.stop('completed');
+                                return;
+                            }
+                        } else if (selectedValue === 'twitter') {
+                            // Check if X Twitter is enabled
+                            if (process.env.ENABLE_X_TWITTER !== 'true') {
+                                const disabledEmbed = new EmbedBuilder()
+                                    .setDescription("❌ X (Twitter) auto-posting is currently disabled in bot configuration.")
+                                    .setColor("#ff0000");
+                                return await i.editReply({ embeds: [disabledEmbed], components: [] });
+                            }
+
+                            // Start X auto-posting with default category
+                            if (client.autoWebScrapeSender) {
+                                await client.autoWebScrapeSender.startXPosting(interaction.channel.id, 'amateur');
+                                
+                                const enabledEmbed = new EmbedBuilder()
+                                    .setTitle("🐦 X (Twitter) Auto-Posting Started")
+                                    .setDescription(`✅ **X (Twitter) auto-posting** enabled for ${interaction.channel}\n\n` +
+                                                   `📂 **Category:** Amateur (default)\n` +
+                                                   `⏰ **Interval:** 3-10 minutes (random)\n` +
+                                                   `🎯 **Source:** X/Twitter Search\n\n` +
+                                                   `💡 **Tip:** Use \`/auto-x action:start\` to select specific categories!`)
+                                    .setColor("#00ff00")
+                                    .setTimestamp();
+                                
+                                await i.editReply({ embeds: [enabledEmbed], components: [] });
+                                collector.stop('completed');
+                                return;
+                            }
+                        }
+
+                        // Fallback if autoWebScrapeSender not available
+                        const errorEmbed = new EmbedBuilder()
+                            .setDescription("❌ Web scraping system not available. Please try again later.")
+                            .setColor("#ff0000");
+                        await i.editReply({ embeds: [errorEmbed], components: [] });
+                        return;
+
+                    } catch (error) {
+                        console.error(`Error starting ${selectedValue} auto-posting:`, error);
+                        const errorEmbed = new EmbedBuilder()
+                            .setDescription(`❌ Failed to start ${selectedValue} auto-posting. Check console for details.`)
+                            .setColor("#ff0000");
+                        await i.editReply({ embeds: [errorEmbed], components: [] });
+                        return;
+                    }
+                }
 
                 if (selectedValue === 'disable') {
                     // Disable auto-posting - remove from database

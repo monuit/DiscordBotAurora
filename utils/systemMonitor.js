@@ -706,6 +706,53 @@ class SystemMonitor {
         this.thresholds = { ...this.thresholds, ...newThresholds };
         console.log('[Monitor] Thresholds updated:', this.thresholds);
     }
+
+    /**
+     * EMERGENCY STOP - Stop all monitoring and clear alerts
+     */
+    async emergencyStop() {
+        console.log('[Monitor] EMERGENCY STOP INITIATED');
+        
+        // Stop monitoring
+        this.isRunning = false;
+        
+        // Clear all monitoring intervals
+        if (this.monitoringInterval) {
+            clearInterval(this.monitoringInterval);
+            this.monitoringInterval = null;
+        }
+        
+        // Clear alert cooldowns
+        this.alertCooldown.clear();
+        
+        // Clear metrics history
+        this.metrics.cpu = [];
+        this.metrics.memory = [];
+        this.metrics.dbLatency = [];
+        this.metrics.networkLatency = [];
+        
+        // Set emergency flags
+        this.emergencyMode = true;
+        this.emergencyStoppedAt = new Date();
+        
+        console.log('[Monitor] EMERGENCY STOP COMPLETE - All monitoring suspended');
+    }
+
+    /**
+     * Check if system is in emergency mode
+     */
+    isEmergencyMode() {
+        return this.emergencyMode || false;
+    }
+
+    /**
+     * Clear emergency mode and allow restart
+     */
+    clearEmergencyMode() {
+        this.emergencyMode = false;
+        this.emergencyStoppedAt = null;
+        console.log('[Monitor] Emergency mode cleared');
+    }
 }
 
 module.exports = SystemMonitor;

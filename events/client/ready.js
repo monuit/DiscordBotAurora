@@ -61,7 +61,14 @@ module.exports = async (client) => {
         webhook_auto_feed_sender,
         premium_webhook_auto_xfollow_sender
     ]
-    cron.schedule('*/15 * * * *', async () => {
+
+    // Initialize global cron jobs tracking
+    if (!global.cronJobs) {
+        global.cronJobs = new Map();
+    }
+
+    // Free functions scheduler (every 15 minutes)
+    const freeFunctionsJob = cron.schedule('*/15 * * * *', async () => {
         try {
             const randomFunction = functions_runner(functions);
             await randomFunction(client);
@@ -69,8 +76,10 @@ module.exports = async (client) => {
             console.error('[Cron] Error in random function scheduler:', error);
         }
     })
+    global.cronJobs.set('freeFunctions', freeFunctionsJob);
 
-    cron.schedule('0 * * * *', async () => {
+    // Premium functions scheduler (every hour)
+    const premiumFunctionsJob = cron.schedule('0 * * * *', async () => {
         try {
             const rf = functions_runner(pref);
             await rf(client);
@@ -78,22 +87,22 @@ module.exports = async (client) => {
             console.error('[Cron] Error in premium function scheduler:', error);
         }
     })//premium random functions
+    global.cronJobs.set('premiumFunctions', premiumFunctionsJob);
 
-    cron.schedule('*/3 * * * *', async () => {
-        try {
-            await webhook_reddit_sender(client);
-        } catch (error) {
-            console.error('[Cron] Error in Reddit webhook sender:', error);
-        }
-    })
+    // Smart Reddit Auto-Post System (NOT cron-based, controlled by demand)
+    // This system only runs when there are active webhooks and uses intelligent scheduling
+    const { startSmartAutoPostSystem } = require('../../Functions/SmartAutoPostManager.js');
+    await startSmartAutoPostSystem(client);
 
-    cron.schedule('0 * * * *', async () => {
+    // Left-right Reddit sender (every hour)
+    const leftRightRedditJob = cron.schedule('0 * * * *', async () => {
         try {
             await webhook_leftandright_reddit_sender(client);
         } catch (error) {
             console.error('[Cron] Error in left-right Reddit sender:', error);
         }
     })//premium reddit
+    global.cronJobs.set('leftRightReddit', leftRightRedditJob);
 
     // Start the sophisticated NSFW presence rotation system
     if (client.presenceRotation) {
@@ -103,6 +112,11 @@ module.exports = async (client) => {
     // Start the auto-promotional system
     if (client.autoPromo) {
         await client.autoPromo.start();
+    }
+
+    // Start the auto web scrape system
+    if (client.autoWebScrapeSender) {
+        await client.autoWebScrapeSender.start();
     }
 
     // Initialize and start system monitoring with 80% thresholds
@@ -121,7 +135,7 @@ module.exports = async (client) => {
     }, 5000); // 5 second delay to let systems stabilize
 
     if (process.env.BOLISTME) {
-        cron.schedule('0 */3 * * *', async () => {
+        const botlistJob = cron.schedule('0 */3 * * *', async () => {
             try {
                 botlistme_requester(client.guilds.cache.size, client.count, client.user.id,
                     async (error, responseData, response) => {
@@ -146,6 +160,7 @@ module.exports = async (client) => {
                 });
             }
         })
+        global.cronJobs.set('botlistUpdater', botlistJob);
         
         // Only start botlist webhook if token is provided and port is available
         if (process.env.BOTLISTMETOKEN) {

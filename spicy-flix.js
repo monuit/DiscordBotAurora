@@ -47,6 +47,10 @@ class MainClient extends Client {
     const AutoPromoSender = require('./Functions/AutoPromoSender');
     this.autoPromo = new AutoPromoSender(this);
 
+    // Initialize auto web scrape system
+    const AutoWebScrapeSender = require('./Functions/AutoWebScrapeSender');
+    this.autoWebScrapeSender = new AutoWebScrapeSender(this);
+
     ["slash", "premiums"].forEach(x => client[x] = new Collection());
     ["loadCommand", "loadEvent", "loadDatabase", "PremiumReader"].forEach(x => require(`./handlers/${x}`)(client));
 

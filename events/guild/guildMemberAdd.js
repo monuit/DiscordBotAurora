@@ -50,29 +50,50 @@ module.exports = async (client, member) => {
             });
 
         } catch (dmError) {
-            // User has DMs disabled or blocked the bot
-            console.log(`[Member Join DM] Could not send DM to ${member.user.tag}: ${dmError.message}`);
+            // Handle different types of DM errors
+            let errorReason = 'Unknown DM error';
             
-            // Log failed DM attempt
-            logger.warning(`Failed to send welcome DM`, {
+            if (dmError.code === 50007) {
+                errorReason = 'User has DMs disabled';
+            } else if (dmError.code === 50013) {
+                errorReason = 'Missing permissions to DM user';
+            } else if (dmError.code === 40003) {
+                errorReason = 'Rate limited - sending too fast';
+            } else if (dmError.message.includes('Cannot send messages to this user')) {
+                errorReason = 'User blocked bot or has DMs disabled';
+            } else if (dmError.message.includes('direct messages too fast')) {
+                errorReason = 'Rate limited - too many DMs';
+            }
+            
+            console.log(`[Member Join DM] Could not send DM to ${member.user.tag}: ${errorReason}`);
+            
+            // Log failed DM attempt (but don't treat it as an error - this is normal)
+            logger.warn(`Failed to send welcome DM`, {
                 userId: member.user.id,
                 username: member.user.tag,
                 guildId: member.guild.id,
                 guildName: member.guild.name,
                 error: dmError.message,
+                errorCode: dmError.code,
+                errorReason: errorReason,
                 action: 'welcome_dm_failed'
             });
+            
+            // Don't re-throw the error - DM failures are expected and normal
         }
 
     } catch (error) {
         console.error('[Guild Member Add Error]:', error);
         
-        // Log the error
+        // Log the error with safe fallbacks
         logger.error(`Guild member add event error`, {
-            error: error.message,
-            stack: error.stack,
-            guildId: member?.guild?.id,
-            userId: member?.user?.id
+            error: error.message || 'Unknown error',
+            stack: error.stack || 'No stack trace',
+            guildId: member?.guild?.id || 'unknown',
+            guildName: member?.guild?.name || 'unknown',
+            userId: member?.user?.id || 'unknown',
+            username: member?.user?.tag || 'unknown',
+            action: 'guild_member_add_error'
         });
     }
 };

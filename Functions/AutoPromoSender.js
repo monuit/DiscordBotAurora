@@ -467,6 +467,53 @@ class AutoPromoSender {
         return (this.rolePromoConfig.wasRunning || this.premiumPromoConfig.wasRunning) &&
                (!this.rolePromoConfig.isRunning && !this.premiumPromoConfig.isRunning);
     }
+
+    /**
+     * EMERGENCY STOP - Stop all promotional campaigns immediately
+     */
+    async emergencyStop() {
+        console.log('[AutoPromo] EMERGENCY STOP INITIATED');
+        
+        // Stop role promo campaign
+        if (this.rolePromoConfig.isRunning) {
+            this.rolePromoConfig.isRunning = false;
+            if (this.rolePromoConfig.timeoutId) {
+                clearTimeout(this.rolePromoConfig.timeoutId);
+                this.rolePromoConfig.timeoutId = null;
+            }
+        }
+        
+        // Stop premium promo campaign
+        if (this.premiumPromoConfig.isRunning) {
+            this.premiumPromoConfig.isRunning = false;
+            if (this.premiumPromoConfig.timeoutId) {
+                clearTimeout(this.premiumPromoConfig.timeoutId);
+                this.premiumPromoConfig.timeoutId = null;
+            }
+        }
+        
+        // Set emergency flags
+        this.emergencyMode = true;
+        this.emergencyStoppedAt = new Date();
+        
+        console.log('[AutoPromo] EMERGENCY STOP COMPLETE - All campaigns stopped');
+    }
+
+    /**
+     * Check if system is in emergency mode
+     */
+    isEmergencyMode() {
+        return this.emergencyMode || false;
+    }
+
+    /**
+     * Clear emergency mode and allow restart
+     */
+    clearEmergencyMode() {
+        this.emergencyMode = false;
+        this.emergencyStoppedAt = null;
+        console.log('[AutoPromo] Emergency mode cleared');
+    }
 }
 
 module.exports = AutoPromoSender;

@@ -41,7 +41,7 @@ class AutoPromoSender {
      * Get promotional message content for premium content
      */
     getPremiumPromoMessage() {
-        return `**Welcome to Aurora!**\nㅤ\n**Providing Top quality leaks from all over the web with content added Daily!**\n\n**Once you pay, you will be added to the Content server automatically!**\n\n**》$50 - Aurora Lifetime (All content + NSFW)**\nAll packages displayed on our website\nExclusive N.S.F.W categories\nMassive amounts of Videos\nPreview: <#${this.premiumPromoConfig.previewChannelId}>\n\n**》$25- Exclusive leaks (Snapchat Leaks)**\nSnapchat leaks from 1000+ girls\nOver 200,000+ files\nOver 500GB of content and updated daily\nPreview: <#${this.premiumPromoConfig.previewChannelId}>\n\n**》$6.99 - Premium (OnlyFans Leaks)**\nOnlyfans leaks from 200+ girls\nOver 5TB of content\nCustom Requests\nNew mega folders\nPreview: <#${this.premiumPromoConfig.previewChannelId}>\n\n**Customer Reviews:** <#${this.premiumPromoConfig.reviewsChannelId}>\n\n**Click the link below to purchase! ⤵️**\n\nhttps://upgrade.chat/storeaurora`;
+        return `**Welcome to Aurora!**\nㅤ\n**Providing Top quality leaks from all over the web with content added Daily!**\n\n**Once you pay, you will be added to the Content server automatically!**\n\n**》$50 - Aurora Lifetime (All content + NSFW)**\nAll packages displayed on our website\nExclusive N.S.F.W categories\nMassive amounts of Videos\nPreview: <#${this.premiumPromoConfig.previewChannelId}>\n\n**》$25- Exclusive leaks**\nVideos and pictures over 1000+ girls\nOver 200,000+ files\nOver 500GB of content and updated daily\nPreview: <#${this.premiumPromoConfig.previewChannelId}>\n\n**》$10.99- Snap leaks (Snapchat Leaks)**\nSnapchat leaks from 1000+ girls\nOver 200,000+ files\nOver 500GB of content and updated daily\nPreview: <#${this.premiumPromoConfig.previewChannelId}>\n\n**》$6.99 - Premium (OnlyFans Leaks)**\nOnlyfans leaks from 200+ girls\nOver 5TB of content\nCustom Requests\nNew mega folders\nPreview: <#${this.premiumPromoConfig.previewChannelId}>\n\n**Customer Reviews:** <#${this.premiumPromoConfig.reviewsChannelId}>\n\n**Click the link below to purchase! ⤵️**\n\nhttps://upgrade.chat/storeaurora`;
     }
 
     /**
@@ -404,6 +404,68 @@ class AutoPromoSender {
      */
     async testPremiumPromo() {
         return await this.sendPremiumPromoMessage();
+    }
+
+    /**
+     * Suspend all campaigns (for emergency memory management)
+     */
+    suspendAllCampaigns() {
+        console.log('[AutoPromo] SUSPENDING ALL CAMPAIGNS - Emergency memory safeguard');
+        
+        // Stop role promo system but don't clear messages
+        if (this.rolePromoConfig.isRunning) {
+            this.rolePromoConfig.wasRunning = true; // Remember it was running
+            this.rolePromoConfig.isRunning = false;
+            if (this.rolePromoConfig.timeoutId) {
+                clearTimeout(this.rolePromoConfig.timeoutId);
+                this.rolePromoConfig.timeoutId = null;
+            }
+        }
+
+        // Stop premium promo system but don't clear messages
+        if (this.premiumPromoConfig.isRunning) {
+            this.premiumPromoConfig.wasRunning = true; // Remember it was running
+            this.premiumPromoConfig.isRunning = false;
+            if (this.premiumPromoConfig.timeoutId) {
+                clearTimeout(this.premiumPromoConfig.timeoutId);
+                this.premiumPromoConfig.timeoutId = null;
+            }
+        }
+        
+        console.log('[AutoPromo] All campaigns suspended for memory conservation');
+    }
+
+    /**
+     * Resume all campaigns (after emergency situation is resolved)
+     */
+    resumeAllCampaigns() {
+        console.log('[AutoPromo] RESUMING ALL CAMPAIGNS - Emergency resolved');
+        
+        // Resume role promo system if it was running
+        if (this.rolePromoConfig.wasRunning) {
+            this.rolePromoConfig.isRunning = true;
+            this.rolePromoConfig.wasRunning = false;
+            this.scheduleRolePromoNext();
+            console.log('[AutoPromo] Role promotional campaign resumed');
+        }
+
+        // Resume premium promo system if it was running
+        if (this.premiumPromoConfig.wasRunning) {
+            this.premiumPromoConfig.isRunning = true;
+            this.premiumPromoConfig.wasRunning = false;
+            this.schedulePremiumPromoNext();
+            console.log('[AutoPromo] Premium promotional campaign resumed');
+        }
+        
+        console.log('[AutoPromo] All campaigns resumed successfully');
+    }
+
+    /**
+     * Check if campaigns are suspended
+     */
+    isSuspended() {
+        return (this.rolePromoConfig.wasRunning || this.premiumPromoConfig.wasRunning) &&
+               (!this.rolePromoConfig.isRunning && !this.premiumPromoConfig.isRunning);
     }
 }
 

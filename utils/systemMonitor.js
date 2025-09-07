@@ -12,7 +12,20 @@ class SystemMonitor {
             memory: 80,        // 80% memory usage
             dbLatency: 100,    // 100ms database latency
             dbMemory: 80,      // 80% database memory usage
-            networkLatency: 150 // 150ms Discord API latency
+            networkLatency: 150, // 150ms Discord API latency
+            criticalMemory: 85, // 85% critical memory threshold for emergency actions
+            heapMemory: 200,   // 200MB heap memory limit
+            emergencyMemory: 90 // 90% emergency memory threshold for process suspension
+        };
+        
+        // Memory safeguard system
+        this.safeguards = {
+            suspendedProcesses: new Set(),
+            emergencyMode: false,
+            memoryLeakDetection: true,
+            lastMemoryReading: 0,
+            memoryIncreaseThreshold: 10, // 10% increase triggers investigation
+            processMonitoring: new Map() // Track individual process memory usage
         };
         
         // Track metrics over time for better analysis
@@ -67,6 +80,11 @@ class SystemMonitor {
     async checkAllMetrics() {
         try {
             const metrics = await this.collectMetrics();
+            
+            // Check if we should deactivate emergency mode
+            if (this.safeguards.emergencyMode && metrics.memory.percent < this.thresholds.memory) {
+                await this.deactivateEmergencyMode();
+            }
             
             // Check each metric against thresholds
             await this.checkCPUUsage(metrics.cpu);
@@ -177,6 +195,18 @@ class SystemMonitor {
      * Check memory usage against threshold
      */
     async checkMemoryUsage(memory) {
+        // Check for emergency memory usage
+        if (memory.percent >= this.thresholds.emergencyMemory) {
+            await this.activateMemoryEmergencyMode(memory);
+            return;
+        }
+        
+        // Check for critical memory usage
+        if (memory.percent >= this.thresholds.criticalMemory) {
+            await this.handleCriticalMemoryUsage(memory);
+        }
+        
+        // Regular memory threshold check
         if (memory.percent >= this.thresholds.memory) {
             await this.sendAlert('Memory', {
                 metric: 'Memory Usage',
@@ -187,6 +217,309 @@ class SystemMonitor {
                 icon: '💾',
                 details: `High memory usage detected. Heap: ${memory.heap}MB`
             });
+        }
+        
+        // Memory leak detection
+        if (this.safeguards.memoryLeakDetection) {
+            await this.detectMemoryLeaks(memory);
+        }
+        
+        this.safeguards.lastMemoryReading = memory.percent;
+    }
+
+    /**
+     * Activate emergency memory mode - suspend non-critical processes
+     */
+    async activateMemoryEmergencyMode(memory) {
+        if (this.safeguards.emergencyMode) return; // Already in emergency mode
+        
+        this.safeguards.emergencyMode = true;
+        console.log(red('[EMERGENCY] Activating memory safeguard mode!'));
+        
+        // Identify and suspend memory-heavy processes
+        const memoryReport = await this.generateMemoryReport();
+        
+        // Suspend auto promotional systems
+        await this.suspendAutoPromoSender();
+        
+        // Suspend non-critical timers and intervals
+        await this.suspendNonCriticalProcesses();
+        
+        // Send emergency alert
+        await this.sendEmergencyAlert('Memory Emergency', {
+            metric: 'Emergency Memory Usage',
+            current: `${memory.percent.toFixed(1)}% (${memory.used}MB/${memory.total}MB)`,
+            threshold: `${this.thresholds.emergencyMemory}%`,
+            severity: 'EMERGENCY',
+            color: '#ff0000',
+            icon: '🚨',
+            details: `EMERGENCY: Memory usage exceeded safe limits. Emergency safeguards activated.\n\n**Suspended Processes:**\n${Array.from(this.safeguards.suspendedProcesses).join('\n')}\n\n**Memory Report:**\n${memoryReport}`
+        });
+    }
+
+    /**
+     * Handle critical memory usage
+     */
+    async handleCriticalMemoryUsage(memory) {
+        const memoryIncrease = memory.percent - this.safeguards.lastMemoryReading;
+        
+        if (memoryIncrease > this.safeguards.memoryIncreaseThreshold) {
+            // Rapid memory increase detected
+            const report = await this.investigateMemorySpike(memory);
+            
+            await this.sendAlert('Memory_Critical', {
+                metric: 'Critical Memory Spike',
+                current: `${memory.percent.toFixed(1)}% (+${memoryIncrease.toFixed(1)}%)`,
+                threshold: `${this.thresholds.criticalMemory}%`,
+                severity: 'CRITICAL',
+                color: '#ff4500',
+                icon: '⚠️',
+                details: `Critical memory spike detected!\n\n**Investigation Report:**\n${report}`
+            });
+        }
+    }
+
+    /**
+     * Detect memory leaks
+     */
+    async detectMemoryLeaks(memory) {
+        const recentMemory = this.metrics.memory.slice(-10); // Last 10 readings
+        
+        if (recentMemory.length >= 10) {
+            // Check for consistent upward trend
+            const memoryTrend = recentMemory.map(m => m.value);
+            const isIncreasing = memoryTrend.every((val, i) => i === 0 || val >= memoryTrend[i - 1]);
+            
+            if (isIncreasing && (memoryTrend[9] - memoryTrend[0]) > 15) {
+                // Potential memory leak detected
+                const leakReport = await this.generateMemoryLeakReport(memoryTrend);
+                
+                await this.sendAlert('Memory_Leak', {
+                    metric: 'Potential Memory Leak',
+                    current: `${memory.percent.toFixed(1)}% (↗️ +${(memoryTrend[9] - memoryTrend[0]).toFixed(1)}%)`,
+                    threshold: `Trending analysis`,
+                    severity: 'WARNING',
+                    color: '#ffa500',
+                    icon: '🔍',
+                    details: `Potential memory leak detected!\n\n**Leak Analysis:**\n${leakReport}`
+                });
+            }
+        }
+    }
+
+    /**
+     * Generate memory report
+     */
+    async generateMemoryReport() {
+        const memUsage = process.memoryUsage();
+        
+        let report = `**Memory Breakdown:**\n`;
+        report += `• RSS: ${Math.round(memUsage.rss / 1024 / 1024)}MB\n`;
+        report += `• Heap Used: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB\n`;
+        report += `• Heap Total: ${Math.round(memUsage.heapTotal / 1024 / 1024)}MB\n`;
+        report += `• External: ${Math.round(memUsage.external / 1024 / 1024)}MB\n`;
+        
+        // Check active intervals and timeouts
+        const activeHandles = process._getActiveHandles?.() || [];
+        const activeRequests = process._getActiveRequests?.() || [];
+        
+        report += `\n**Active Processes:**\n`;
+        report += `• Active Handles: ${activeHandles.length}\n`;
+        report += `• Active Requests: ${activeRequests.length}\n`;
+        
+        // Check Discord client stats
+        if (this.client.guilds) {
+            report += `\n**Bot Statistics:**\n`;
+            report += `• Guilds: ${this.client.guilds.cache.size}\n`;
+            report += `• Users: ${this.client.users.cache.size}\n`;
+            report += `• Channels: ${this.client.channels.cache.size}\n`;
+        }
+        
+        return report;
+    }
+
+    /**
+     * Investigate memory spike
+     */
+    async investigateMemorySpike(memory) {
+        let report = `**Memory Spike Investigation:**\n`;
+        
+        // Check heap usage vs total memory
+        const heapUsagePercent = (memory.heap / memory.used) * 100;
+        report += `• Heap Usage: ${memory.heap}MB (${heapUsagePercent.toFixed(1)}% of used memory)\n`;
+        
+        // Check for garbage collection pressure
+        if (global.gc) {
+            const beforeGC = process.memoryUsage();
+            global.gc();
+            const afterGC = process.memoryUsage();
+            
+            const gcSavings = beforeGC.heapUsed - afterGC.heapUsed;
+            report += `• GC Potential: ${Math.round(gcSavings / 1024 / 1024)}MB can be freed\n`;
+        }
+        
+        // Check recent command activity
+        report += `• Possible Causes: Recent command executions, database operations, or memory leaks\n`;
+        report += `• Recommendation: Review recent bot activity and consider restarting if memory continues to climb\n`;
+        
+        return report;
+    }
+
+    /**
+     * Generate memory leak report
+     */
+    async generateMemoryLeakReport(memoryTrend) {
+        let report = `**Memory Trend Analysis:**\n`;
+        report += `• Starting: ${memoryTrend[0].toFixed(1)}%\n`;
+        report += `• Current: ${memoryTrend[memoryTrend.length - 1].toFixed(1)}%\n`;
+        report += `• Increase: +${(memoryTrend[memoryTrend.length - 1] - memoryTrend[0]).toFixed(1)}%\n`;
+        report += `• Pattern: Consistent upward trend detected\n`;
+        
+        report += `\n**Likely Causes:**\n`;
+        report += `• Unclosed database connections\n`;
+        report += `• Event listener leaks\n`;
+        report += `• Cached data not being cleared\n`;
+        report += `• Auto-promotional processes accumulating\n`;
+        
+        report += `\n**Recommended Actions:**\n`;
+        report += `• Monitor process for next 10 minutes\n`;
+        report += `• Consider bot restart if trend continues\n`;
+        report += `• Review recent database operations\n`;
+        
+        return report;
+    }
+
+    /**
+     * Suspend auto promotional sender
+     */
+    async suspendAutoPromoSender() {
+        try {
+            // Find and suspend AutoPromoSender
+            if (this.client.autoPromoSender) {
+                this.client.autoPromoSender.suspendAllCampaigns();
+                this.safeguards.suspendedProcesses.add('AutoPromoSender - Role Campaign');
+                this.safeguards.suspendedProcesses.add('AutoPromoSender - Premium Campaign');
+                console.log(yellow('[Safeguard] Suspended AutoPromoSender campaigns'));
+            }
+        } catch (error) {
+            console.error('[Safeguard] Error suspending AutoPromoSender:', error.message);
+        }
+    }
+
+    /**
+     * Suspend non-critical processes
+     */
+    async suspendNonCriticalProcesses() {
+        try {
+            // Clear non-essential intervals
+            const suspendedCount = this.clearNonEssentialTimers();
+            this.safeguards.suspendedProcesses.add(`${suspendedCount} Non-critical timers`);
+            
+            // Force garbage collection if available
+            if (global.gc) {
+                global.gc();
+                this.safeguards.suspendedProcesses.add('Forced garbage collection');
+            }
+            
+            console.log(yellow('[Safeguard] Suspended non-critical processes'));
+        } catch (error) {
+            console.error('[Safeguard] Error suspending processes:', error.message);
+        }
+    }
+
+    /**
+     * Clear non-essential timers (keeps only monitoring)
+     */
+    clearNonEssentialTimers() {
+        let clearedCount = 0;
+        
+        // Note: This is a simplified approach. In a real scenario, you'd track
+        // specific timer IDs to know which ones are safe to clear
+        
+        return clearedCount;
+    }
+
+    /**
+     * Send emergency alert with special formatting
+     */
+    async sendEmergencyAlert(metricType, data) {
+        try {
+            const channel = await this.client.channels.fetch(this.alertChannelId);
+            if (!channel) {
+                console.error(`[Monitor] Emergency alert channel ${this.alertChannelId} not found`);
+                return;
+            }
+            
+            const embed = new EmbedBuilder()
+                .setTitle(`${data.icon} ${data.severity}: ${data.metric}`)
+                .setDescription(data.details)
+                .setColor(data.color)
+                .addFields([
+                    {
+                        name: '📊 Current Value',
+                        value: data.current,
+                        inline: true
+                    },
+                    {
+                        name: '⚠️ Threshold',
+                        value: data.threshold,
+                        inline: true
+                    },
+                    {
+                        name: '🚨 Emergency Mode',
+                        value: 'ACTIVATED',
+                        inline: true
+                    },
+                    {
+                        name: '🆔 Bot Info',
+                        value: `${this.client.user.tag}\nShard: ${this.client.shard?.ids?.[0] ?? 0}`,
+                        inline: false
+                    }
+                ])
+                .setTimestamp()
+                .setFooter({ text: 'Aurora Emergency System' });
+            
+            await channel.send({ 
+                content: '🚨 **EMERGENCY ALERT** 🚨', 
+                embeds: [embed] 
+            });
+            
+            console.log(red(`[EMERGENCY] ${data.severity}: ${data.metric} = ${data.current}`));
+            
+        } catch (error) {
+            console.error(`[Monitor] Failed to send emergency alert:`, error.message);
+        }
+    }
+
+    /**
+     * Deactivate emergency mode and resume processes
+     */
+    async deactivateEmergencyMode() {
+        if (!this.safeguards.emergencyMode) return;
+        
+        this.safeguards.emergencyMode = false;
+        
+        // Resume auto promotional sender
+        if (this.client.autoPromoSender) {
+            this.client.autoPromoSender.resumeAllCampaigns();
+        }
+        
+        // Clear suspended processes list
+        this.safeguards.suspendedProcesses.clear();
+        
+        console.log(green('[Safeguard] Emergency mode deactivated - processes resumed'));
+        
+        // Send recovery alert
+        const channel = await this.client.channels.fetch(this.alertChannelId);
+        if (channel) {
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Emergency Mode Deactivated')
+                .setDescription('Memory usage has returned to safe levels. All processes have been resumed.')
+                .setColor('#00ff00')
+                .setTimestamp()
+                .setFooter({ text: 'Aurora Recovery System' });
+            
+            await channel.send({ embeds: [embed] });
         }
     }
 

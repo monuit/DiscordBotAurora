@@ -85,7 +85,11 @@ module.exports = {
         }
 
         if (action === 'delete') {
-            await interaction.deferReply();
+            try {
+                await interaction.deferReply();
+            } catch (error) {
+                console.log(`[AUTO-CREATE-CHANNELS] Interaction already acknowledged:`, error.message);
+            }
             
             const category = guild.channels.cache.get(categoryId);
             if (!category) {
@@ -132,7 +136,11 @@ module.exports = {
         }
 
         if (action === 'create') {
-            await interaction.deferReply();
+            try {
+                await interaction.deferReply();
+            } catch (error) {
+                console.log(`[AUTO-CREATE-CHANNELS] Interaction already acknowledged:`, error.message);
+            }
             
             console.log(`[AUTO-CREATE] Starting channel creation for category ${categoryId}`);
             
@@ -144,7 +152,25 @@ module.exports = {
                     .setTitle("❌ Category Not Found")
                     .setDescription(`Category with ID ${categoryId} not found.`)
                     .setTimestamp();
-                return interaction.editReply({ embeds: [errorEmbed] });
+                    
+                try {
+                    if (interaction.deferred) {
+                        return interaction.editReply({ embeds: [errorEmbed] });
+                    } else if (interaction.replied) {
+                        return interaction.followUp({ embeds: [errorEmbed] });
+                    } else {
+                        return interaction.reply({ embeds: [errorEmbed] });
+                    }
+                } catch (error) {
+                    console.log(`[AUTO-CREATE-CHANNELS] Error sending response, trying channel send:`, error.message);
+                    // Fallback: send directly to the channel
+                    try {
+                        await interaction.channel.send({ embeds: [errorEmbed] });
+                    } catch (fallbackError) {
+                        console.log(`[AUTO-CREATE-CHANNELS] Channel fallback failed:`, fallbackError.message);
+                    }
+                    return;
+                }
             }
 
             console.log(`[AUTO-CREATE] Found category: ${category.name}`);
@@ -261,7 +287,23 @@ module.exports = {
 
             successEmbed.setTimestamp();
 
-            return interaction.editReply({ embeds: [successEmbed] });
+            try {
+                if (interaction.deferred) {
+                    return interaction.editReply({ embeds: [successEmbed] });
+                } else if (interaction.replied) {
+                    return interaction.followUp({ embeds: [successEmbed] });
+                } else {
+                    return interaction.reply({ embeds: [successEmbed] });
+                }
+            } catch (error) {
+                console.log(`[AUTO-CREATE-CHANNELS] Error sending success response, trying channel send:`, error.message);
+                // Fallback: send directly to the channel
+                try {
+                    await interaction.channel.send({ embeds: [successEmbed] });
+                } catch (fallbackError) {
+                    console.log(`[AUTO-CREATE-CHANNELS] Channel fallback failed:`, fallbackError.message);
+                }
+            }
         }
     }
 };

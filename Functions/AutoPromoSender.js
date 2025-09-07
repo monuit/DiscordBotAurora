@@ -1,4 +1,4 @@
-const { EmbedBuilder, WebhookClient } = require('discord.js');
+const { EmbedBuilder, WebhookClient, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 class AutoPromoSender {
     constructor(client) {
@@ -71,8 +71,18 @@ class AutoPromoSender {
 
             const message = this.getRolePromoMessage();
             
+            // Create upgrade button
+            const upgradeButton = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setLabel('🚀 Upgrade to Premium - Skip the Wait!')
+                        .setStyle(ButtonStyle.Link)
+                        .setURL('https://upgrade.chat/storeaurora')
+                );
+            
             const sentMessage = await channel.send({
                 content: message,
+                components: [upgradeButton],
                 allowedMentions: {
                     everyone: true,
                     roles: [this.rolePromoConfig.roleId]
@@ -117,8 +127,18 @@ class AutoPromoSender {
 
             const message = this.getPremiumPromoMessage();
             
+            // Create upgrade button
+            const upgradeButton = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setLabel('🚀 Upgrade Now - Instant Access')
+                        .setStyle(ButtonStyle.Link)
+                        .setURL('https://upgrade.chat/storeaurora')
+                );
+            
             const sentMessage = await channel.send({
                 content: message,
+                components: [upgradeButton],
                 allowedMentions: {
                     everyone: false,
                     roles: [],

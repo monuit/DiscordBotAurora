@@ -1,4 +1,4 @@
-const { EmbedBuilder, PermissionsBitField } = require('discord.js');
+const { EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 module.exports = {
     name: ["testmedia"],
@@ -53,21 +53,7 @@ module.exports = {
     ],
 
     run: async (interaction, client) => {
-        // Check if user has permissions (Admin or Manage Channels)
-        const member = interaction.member;
-        if (!member.permissions.has(PermissionsBitField.Flags.Administrator) && 
-            !member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
-            const errorEmbed = new EmbedBuilder()
-                .setColor('#ff0000')
-                .setTitle('🚫 Access Denied')
-                .setDescription('You need **Administrator** or **Manage Channels** permissions to test media functionality.')
-                .setTimestamp();
-
-            return await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
-        }
-
-        await interaction.deferReply();
-
+        // Skip interaction acknowledgment - post content directly to avoid conflicts
         const source = interaction.options.getString('source');
         const category = interaction.options.getString('category') || 'hot';
         const debug = interaction.options.getBoolean('debug') || false;
@@ -91,66 +77,58 @@ module.exports = {
             }
 
             if (!contentData || !contentData.url) {
-                const errorEmbed = new EmbedBuilder()
-                    .setColor('#ff9900')
-                    .setTitle(`⚠️ ${sourceUsed.toUpperCase()} Test`)
-                    .setDescription(`❌ **No media URL returned from ${sourceUsed.toUpperCase()}**`)
-                    .setTimestamp();
-                await interaction.editReply({ embeds: [errorEmbed] });
+                console.log(`[TESTMEDIA] No content from ${sourceUsed}`);
                 return;
             }
 
-            // Determine if it's a video or image
-            const isVideo = contentData.url.includes('.mp4') || contentData.url.includes('.webm');
-            const isGif = contentData.url.includes('.gif');
+            // Post content to channel (this will be the main visible message)
+            console.log(`[TESTMEDIA] Starting ${sourceUsed} test with category: ${category}`);
+            
+            // Post content publicly to channel
+            console.log(`[TESTMEDIA] Posting ${sourceUsed} content`);
+            const message = await interaction.channel.send({
+                content: contentData.url
+            });
+            console.log(`[TESTMEDIA] Posted content successfully`);
 
-            if (isVideo) {
-                // For videos (Redgifs), send ONLY the video URL directly - no embed
-                await interaction.editReply({ 
-                    content: contentData.url  // Just the video URL for Discord to embed
-                });
+            // Add upgrade button for redgifs after delay
+            if (sourceUsed === 'redgifs' && message) {
+                console.log(`[TESTMEDIA] Scheduling upgrade button for message ID: ${message.id}`);
+                setTimeout(async () => {
+                    try {
+                        // Fetch the message fresh to ensure it still exists and we have current data
+                        const freshMessage = await interaction.channel.messages.fetch(message.id);
+                        
+                        const upgradeButton = new ActionRowBuilder()
+                            .addComponents(
+                                new ButtonBuilder()
+                                    .setLabel('🚀 Upgrade to Premium')
+                                    .setStyle(ButtonStyle.Link)
+                                    .setURL('https://upgrade.chat/storeaurora')
+                            );
 
-            } else {
-                // For images and GIFs, use embed image
-                const mediaEmbed = new EmbedBuilder()
-                    .setColor('#00ff00')
-                    .setTitle(`${isGif ? '🎞️' : '🖼️'} ${sourceUsed.toUpperCase()} ${isGif ? 'GIF' : 'Image'} Test`)
-                    .setDescription(contentData.description || `Testing ${sourceUsed.toUpperCase()} content`)
-                    .setImage(contentData.url)
-                    .setTimestamp()
-                    .setFooter({ text: `✅ ${sourceUsed.toUpperCase()} ${isGif ? 'GIF' : 'image'} test completed` });
-
-                // Add debug info if requested
-                if (debug && contentData.debug) {
-                    const debugInfo = [];
-                    if (contentData.debug.responseTime) debugInfo.push(`⏱️ ${contentData.debug.responseTime}ms`);
-                    if (contentData.debug.urlAccessible !== undefined) debugInfo.push(`🔗 ${contentData.debug.urlAccessible ? '✅' : '❌'}`);
-                    if (debugInfo.length > 0) {
-                        mediaEmbed.addFields({ name: '🔍 Debug', value: debugInfo.join(' | '), inline: false });
+                        // Use the fresh message reference for editing
+                        await freshMessage.edit({
+                            content: contentData.url,
+                            components: [upgradeButton]
+                        });
+                        console.log(`[TESTMEDIA] Successfully edited message ${freshMessage.id} with upgrade button`);
+                    } catch (editError) {
+                        console.log(`[TESTMEDIA] Edit failed: ${editError.message}`);
+                        // If edit fails, log the error but don't create a new message
+                        if (editError.code === 10008) {
+                            console.log(`[TESTMEDIA] Message was deleted, cannot add upgrade button`);
+                        } else if (editError.code === 50001) {
+                            console.log(`[TESTMEDIA] Missing access to edit message`);
+                        } else {
+                            console.log(`[TESTMEDIA] Unknown edit error: ${editError.code}`);
+                        }
                     }
-                }
-
-                await interaction.editReply({ embeds: [mediaEmbed] });
+                }, 3000);
             }
 
         } catch (error) {
             console.error('[TestMedia] Error during media test:', error);
-
-            const errorEmbed = new EmbedBuilder()
-                .setColor('#ff0000')
-                .setTitle('❌ Media Test Failed')
-                .setDescription(`**${sourceUsed.toUpperCase()} Error:** ${error.message}`)
-                .setTimestamp();
-
-            if (debug) {
-                errorEmbed.addFields({ 
-                    name: '🔍 Debug Stack', 
-                    value: `\`\`\`${error.stack?.substring(0, 1000) || 'No stack trace available'}\`\`\``, 
-                    inline: false 
-                });
-            }
-
-            await interaction.editReply({ embeds: [errorEmbed] });
         }
     }
 };

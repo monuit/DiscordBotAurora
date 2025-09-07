@@ -154,20 +154,23 @@ module.exports = async (client, interaction) => {
       }
 
       // Check global command cooldown - only one instance of each command type allowed
-      const canStart = globalCooldown.startCommand(
-        interaction.commandName, 
-        interaction.user.id, 
-        interaction.guild.id
-      );
+      // Skip cooldown for testmedia commands (testing purposes)
+      if (interaction.commandName !== 'testmedia') {
+        const canStart = globalCooldown.startCommand(
+          interaction.commandName, 
+          interaction.user.id, 
+          interaction.guild.id
+        );
 
-      if (!canStart) {
-        const activeCommand = globalCooldown.getActiveCommand(interaction.commandName);
-        const waitingTime = activeCommand ? Math.ceil((30000 - (Date.now() - activeCommand.timestamp)) / 1000) : 30;
-        
-        return interaction.reply({
-          content: `⏳ **Command in use!**\n\nSomeone is already using the \`/${interaction.commandName}\` command on this server.\n\n⏰ Please wait **${waitingTime}s** and try again.`,
-          ephemeral: true
-        });
+        if (!canStart) {
+          const activeCommand = globalCooldown.getActiveCommand(interaction.commandName);
+          const waitingTime = activeCommand ? Math.ceil((30000 - (Date.now() - activeCommand.timestamp)) / 1000) : 30;
+          
+          return interaction.reply({
+            content: `⏳ **Command in use!**\n\nSomeone is already using the \`/${interaction.commandName}\` command on this server.\n\n⏰ Please wait **${waitingTime}s** and try again.`,
+            ephemeral: true
+          });
+        }
       }
 
       // Execute command directly with cooldown management
@@ -177,8 +180,10 @@ module.exports = async (client, interaction) => {
         // Log the error but don't let it break the cooldown system
         console.error(`[${interaction.commandName.toUpperCase()}] Command error:`, error);
       } finally {
-        // Always mark command as complete, even if it failed
-        globalCooldown.completeCommand(interaction.commandName, interaction.user.id);
+        // Always mark command as complete, even if it failed (skip for testmedia)
+        if (interaction.commandName !== 'testmedia') {
+          globalCooldown.completeCommand(interaction.commandName, interaction.user.id);
+        }
       }
 
       // Auto-delete only bot configuration/error responses after 30 seconds

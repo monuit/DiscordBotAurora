@@ -1,4 +1,4 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const RedgifsRequester = require('./others/redgifs_requester');
 const XTwitterRequester = require('./others/x_twitter_requester');
 
@@ -212,16 +212,89 @@ class AutoWebScrapeSender {
                     .setImage(content.url)
                     .setColor("#ff6b35");
                 
-                await channel.send({ embeds: [embed] });
-                console.log(`[AutoWebScrape] ✅ Successfully posted ${config.source} ${config.category} content as embed`);
+                // For redgifs, post without button first, then edit to add button
+                if (config.source === 'redgifs') {
+                    const message = await channel.send({ embeds: [embed] });
+                    console.log(`[AutoWebScrape] Posted redgifs content, scheduling upgrade button for message ID: ${message.id}`);
+                    
+                    // Wait 3 seconds then add upgrade button
+                    setTimeout(async () => {
+                        try {
+                            // Fetch the message fresh to ensure it still exists and we have current data
+                            const freshMessage = await channel.messages.fetch(message.id);
+                            
+                            const upgradeButton = new ActionRowBuilder()
+                                .addComponents(
+                                    new ButtonBuilder()
+                                        .setLabel('🚀 Upgrade to Premium')
+                                        .setStyle(ButtonStyle.Link)
+                                        .setURL('https://upgrade.chat/storeaurora')
+                                );
+                            
+                            // Use the fresh message reference for editing
+                            await freshMessage.edit({
+                                embeds: [embed],
+                                components: [upgradeButton]
+                            });
+                            console.log(`[AutoWebScrape] ✅ Successfully edited message ${freshMessage.id} with upgrade button`);
+                        } catch (editError) {
+                            console.log(`[AutoWebScrape] Error adding upgrade button: ${editError.message}`);
+                            // Handle Discord API error codes
+                            if (editError.code === 10008) {
+                                console.log(`[AutoWebScrape] Message was deleted, cannot add upgrade button`);
+                            } else if (editError.code === 50001) {
+                                console.log(`[AutoWebScrape] Missing access to edit message`);
+                            } else {
+                                console.log(`[AutoWebScrape] Unknown edit error: ${editError.code}`);
+                            }
+                        }
+                    }, 3000);
+                    
+                } else {
+                    // For non-redgifs content, post normally
+                    await channel.send({ embeds: [embed] });
+                }
+                
+                console.log(`[AutoWebScrape] ✅ Successfully posted ${config.source} ${config.category} content as embed${config.source === 'redgifs' ? ' with delayed upgrade button' : ''}`);
                 
             } catch (embedError) {
                 console.error(`[AutoWebScrape] Embed posting failed, trying text with URL:`, embedError.message);
                 
                 // Strategy 2: Fallback to text message with URL
                 try {
-                    await channel.send(`🔥 **${config.category.toUpperCase()}** from **${config.source.toUpperCase()}**\n${content.url}`);
-                    console.log(`[AutoWebScrape] ✅ Successfully posted ${config.source} ${config.category} content as text with URL`);
+                    let textMessage = `🔥 **${config.category.toUpperCase()}** from **${config.source.toUpperCase()}**\n${content.url}`;
+                    
+                    // For redgifs, post without button first, then edit to add button
+                    if (config.source === 'redgifs') {
+                        const message = await channel.send({ content: textMessage });
+                        
+                        // Wait 3 seconds then add upgrade button
+                        setTimeout(async () => {
+                            try {
+                                const upgradeButton = new ActionRowBuilder()
+                                    .addComponents(
+                                        new ButtonBuilder()
+                                            .setLabel('🚀 Upgrade to Premium')
+                                            .setStyle(ButtonStyle.Link)
+                                            .setURL('https://upgrade.chat/storeaurora')
+                                    );
+                                
+                                await message.edit({
+                                    content: textMessage,
+                                    components: [upgradeButton]
+                                });
+                                console.log(`[AutoWebScrape] ✅ Added upgrade button to redgifs text`);
+                            } catch (editError) {
+                                console.log(`[AutoWebScrape] Error adding upgrade button to text:`, editError.message);
+                            }
+                        }, 3000);
+                        
+                    } else {
+                        // For non-redgifs content, post normally
+                        await channel.send({ content: textMessage });
+                    }
+                    
+                    console.log(`[AutoWebScrape] ✅ Successfully posted ${config.source} ${config.category} content as text with URL${config.source === 'redgifs' ? ' and delayed upgrade button' : ''}`);
                     
                 } catch (textError) {
                     console.error(`[AutoWebScrape] CRITICAL ERROR: Both embed and text posting failed:`, textError.message);

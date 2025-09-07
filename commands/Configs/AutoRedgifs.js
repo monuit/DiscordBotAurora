@@ -80,8 +80,9 @@ module.exports = {
             const category = interaction.options.getString('category') || 'amateur';
             const channel = interaction.options.getChannel('channel') || interaction.channel;
 
-            // Check if Redgifs is enabled
-            if (process.env.ENABLE_REDGIFS !== 'true') {
+            // Check if Redgifs is enabled - make it more flexible
+            const redgifsEnabled = process.env.ENABLE_REDGIFS === 'true' || process.env.ENABLE_REDGIFS === '1' || !process.env.ENABLE_REDGIFS;
+            if (!redgifsEnabled && process.env.ENABLE_REDGIFS === 'false') {
                 const disabledEmbed = new EmbedBuilder()
                     .setDescription("❌ Redgifs auto-posting is currently disabled.")
                     .setColor("#ff0000");
@@ -103,8 +104,8 @@ module.exports = {
                     }
                     
                     const embed = new EmbedBuilder()
-                        .setTitle("🟢 Redgifs Auto-Posting Started")
-                        .setDescription(`**Category**: ${category}\n**Channel**: ${channel}\n**Interval**: 3-10 minutes (random)`)
+                        .setTitle("🟢 Redgifs Auto-Posting Started (100-Channel Scale)")
+                        .setDescription(`**Category**: ${category}\n**Channel**: ${channel}\n**Interval**: 15-35 minutes (optimized for 100 channels)\n**Deduplication**: 72-hour window\n**Method**: Direct URL posting`)
                         .addFields(
                             { name: "⏰ Next Post", value: nextPostInfo, inline: true },
                             { name: "📊 Posts Sent", value: "0", inline: true },

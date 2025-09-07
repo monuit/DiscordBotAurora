@@ -51,6 +51,10 @@ class MainClient extends Client {
     const AutoWebScrapeSender = require('./Functions/AutoWebScrapeSender');
     this.autoWebScrapeSender = new AutoWebScrapeSender(this);
 
+    // Initialize auto-post optimizer for performance monitoring
+    const AutoPostOptimizer = require('./utils/autoPostOptimizer');
+    this.autoPostOptimizer = new AutoPostOptimizer(this);
+
     ["slash", "premiums"].forEach(x => client[x] = new Collection());
     ["loadCommand", "loadEvent", "loadDatabase", "PremiumReader"].forEach(x => require(`./handlers/${x}`)(client));
 

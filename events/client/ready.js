@@ -119,6 +119,12 @@ module.exports = async (client) => {
         await client.autoWebScrapeSender.start();
     }
 
+    // Start the auto-post optimizer for performance monitoring
+    if (client.autoPostOptimizer) {
+        client.autoPostOptimizer.startMonitoring();
+        console.log('[AutoPostOptimizer] Performance monitoring started');
+    }
+
     // Initialize and start system monitoring with 80% thresholds
     console.log('[Monitor] Initializing system monitoring with threshold alerts...');
     client.systemMonitor = new SystemMonitor(client);

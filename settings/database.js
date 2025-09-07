@@ -5,15 +5,48 @@ async function connectDatabase() {
         await mongoose.connect(process.env.MONGO_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 30000, // 30 seconds
-            socketTimeoutMS: 45000, // 45 seconds
-            bufferMaxEntries: 0,
-            maxPoolSize: 10,
-            minPoolSize: 5,
-            maxIdleTimeMS: 30000,
+            
+            // PERFORMANCE OPTIMIZATION: Reduced timeouts for faster responses
+            serverSelectionTimeoutMS: 10000, // 10 seconds (was 30)
+            socketTimeoutMS: 15000, // 15 seconds (was 45)
+            connectTimeoutMS: 10000, // 10 seconds connection timeout
+            
+            // MEMORY OPTIMIZATION: Optimized connection pooling
+            maxPoolSize: 5, // Reduced from 10 to limit memory usage
+            minPoolSize: 2, // Reduced from 5
+            maxIdleTimeMS: 15000, // 15 seconds (was 30) - faster cleanup
+            
+            // PERFORMANCE: Buffer optimization
+            bufferMaxEntries: 0, // Disable mongoose buffering for faster errors
+            bufferCommands: false, // Disable command buffering
+            
+            // RELIABILITY: Write and read concerns
             retryWrites: true,
+            readPreference: 'primary', // Use primary for consistency
+            
+            // PERFORMANCE: Compression
+            compressors: ['zlib'],
+            zlibCompressionLevel: 6,
+            
+            // MEMORY: Connection cleanup
+            heartbeatFrequencyMS: 10000, // 10 seconds heartbeat
+            family: 4 // Force IPv4 for better performance
         });
-        console.log('✅ Connected to MongoDB');
+        
+        // PERFORMANCE: Set up monitoring for slow operations
+        mongoose.connection.db.on('commandStarted', (event) => {
+            if (event.commandName !== 'ismaster' && event.commandName !== 'ping') {
+                console.log(`[DB] Starting ${event.commandName} on ${event.databaseName}.${event.command[event.commandName]}`);
+            }
+        });
+        
+        mongoose.connection.db.on('commandSucceeded', (event) => {
+            if (event.duration > 100 && event.commandName !== 'ismaster' && event.commandName !== 'ping') {
+                console.warn(`[DB] SLOW QUERY: ${event.commandName} took ${event.duration}ms`);
+            }
+        });
+        
+        console.log('✅ Connected to MongoDB with optimized settings');
     } catch (error) {
         console.error('❌ MongoDB connection failed:', error);
         

@@ -52,7 +52,28 @@ function getCommandType(typeString) {
 
     await chillout.forEach(interactionFilePaths, (interactionFilePath) => {
       const cmd = require(interactionFilePath);
-      console.log(`Interaction "${cmd.type == "CHAT_INPUT" ? `/${cmd.name.join(" ")}` : `${cmd.name[0]}`}" ${cmd.name[1] || ""} ${cmd.name[2] || ""} added to the transform list!`);
+      const cmdName = Array.isArray(cmd.name) ? cmd.name : [cmd.name];
+      
+      // Validate command structure
+      if (!cmd.name || (Array.isArray(cmd.name) && cmd.name.length === 0) || 
+          (Array.isArray(cmd.name) && cmd.name.some(n => !n)) ||
+          (!Array.isArray(cmd.name) && !cmd.name)) {
+        console.error(`❌ SKIPPING INVALID COMMAND: ${interactionFilePath} - missing or invalid name property`);
+        return; // Skip this command
+      }
+      
+      if (!cmd.description) {
+        console.error(`❌ SKIPPING INVALID COMMAND: ${interactionFilePath} - missing description property`);
+        return; // Skip this command
+      }
+      
+      console.log(`Interaction "${cmd.type == "CHAT_INPUT" ? `/${cmdName.join(" ")}` : `${cmdName[0]}`}" ${cmdName[1] || ""} ${cmdName[2] || ""} added to the transform list!`);
+      
+      // Ensure name is always an array for consistency
+      if (!Array.isArray(cmd.name)) {
+        cmd.name = [cmd.name];
+      }
+      
       store.push(cmd);
     });
 

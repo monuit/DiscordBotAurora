@@ -456,7 +456,13 @@ async function handlePrefetchQueueStatus(i, interaction, client) {
 
         if (!agg || agg.length === 0) {
             const emptyEmbed = new EmbedBuilder().setDescription('✅ Prefetch queue is empty for Redgifs.').setColor('#00ff00');
-            await i.editReply({ embeds: [emptyEmbed] });
+            try {
+                if (i.deferred || i.replied) await i.followUp({ embeds: [emptyEmbed], ephemeral: true });
+                else await i.editReply({ embeds: [emptyEmbed] });
+            } catch (e) {
+                // ignore Unknown Message / already replied errors
+                if (!e || !e.code || (e.code !== 10008 && e.code !== 'InteractionAlreadyReplied')) console.error('Failed to send empty prefetch reply:', e);
+            }
             return;
         }
 
@@ -477,10 +483,15 @@ async function handlePrefetchQueueStatus(i, interaction, client) {
             .addFields(fields.slice(0, 24)); // Discord embed limit
 
         // Post ephemeral reply to the admin. Use followUp when already acknowledged.
-        if (i.deferred || i.replied) {
-            await i.followUp({ embeds: [embed], ephemeral: true });
-        } else {
-            await i.editReply({ embeds: [embed] });
+        try {
+            if (i.deferred || i.replied) {
+                await i.followUp({ embeds: [embed], ephemeral: true });
+            } else {
+                await i.editReply({ embeds: [embed] });
+            }
+        } catch (e) {
+            // ignore discord Unknown Message (10008) or InteractionAlreadyReplied
+            if (!e || !e.code || (e.code !== 10008 && e.code !== 'InteractionAlreadyReplied')) console.error('Failed to send prefetch embed:', e);
         }
 
         // Also POST a compact summary to the configured GUILD_LOGS webhook for visibility
@@ -493,8 +504,13 @@ async function handlePrefetchQueueStatus(i, interaction, client) {
         } catch (e) { /* ignore webhook failures */ }
     } catch (err) {
         console.error('Error fetching prefetch queue status:', err);
-        const errorEmbed = new EmbedBuilder().setDescription('❌ Failed to fetch prefetch queue status').setColor('#ff0000');
-        try { await i.editReply({ embeds: [errorEmbed] }); } catch (e) { console.error(e); }
+            const errorEmbed = new EmbedBuilder().setDescription('❌ Failed to fetch prefetch queue status').setColor('#ff0000');
+            try {
+                if (i.deferred || i.replied) await i.followUp({ embeds: [errorEmbed], ephemeral: true });
+                else await i.editReply({ embeds: [errorEmbed] });
+            } catch (e) {
+                if (!e || !e.code || (e.code !== 10008 && e.code !== 'InteractionAlreadyReplied')) console.error('Failed to send prefetch error:', e);
+            }
     }
 }
 

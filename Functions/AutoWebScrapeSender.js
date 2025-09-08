@@ -32,6 +32,9 @@ class AutoWebScrapeSender {
 
         this.contentCache = new Map();
         this.maxCacheSize = 1000;
+    // Temporary prefetch cache used during immediate prefetch/post lifecycle
+    this.tempPrefetch = new Set();
+    this.prefetchTimeouts = new Map();
 
     // Prefetch settings for Redgifs
     // Prefetch tuning

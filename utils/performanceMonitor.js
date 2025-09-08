@@ -3,6 +3,8 @@
  * Optimized for 100-channel auto-posting scale
  */
 
+const os = require('os');
+
 class PerformanceMonitor {
     constructor() {
         this.metrics = {
@@ -12,11 +14,18 @@ class PerformanceMonitor {
             concurrent: []
         };
         
+        // memory thresholds can be configured via env or will be derived from system memory
+        const totalMB = Math.round(os.totalmem() / 1024 / 1024);
+        const env = process.env || {};
+        const defaultWarning = Math.max(120, Math.round(totalMB * 0.10));
+        const defaultCritical = Math.max(140, Math.round(totalMB * 0.15));
+        const defaultEmergency = Math.max(160, Math.round(totalMB * 0.20));
+
         this.thresholds = {
             memory: {
-                warning: 120, // MB
-                critical: 140, // MB
-                emergency: 160 // MB
+                warning: env.PERF_MEMORY_WARNING ? parseInt(env.PERF_MEMORY_WARNING, 10) : defaultWarning,
+                critical: env.PERF_MEMORY_CRITICAL ? parseInt(env.PERF_MEMORY_CRITICAL, 10) : defaultCritical,
+                emergency: env.PERF_MEMORY_EMERGENCY ? parseInt(env.PERF_MEMORY_EMERGENCY, 10) : defaultEmergency
             },
             database: {
                 slow: 100, // ms
@@ -32,6 +41,8 @@ class PerformanceMonitor {
         
         this.isMonitoring = false;
         this.monitoringInterval = null;
+    // throttle repeated memory warnings to at most one per minute
+    this._lastMemoryWarningAt = 0;
     }
 
     /**
@@ -93,13 +104,24 @@ class PerformanceMonitor {
             this.metrics.memory = this.metrics.memory.slice(-20);
         }
 
-        // Check memory thresholds
+        // Check memory thresholds, but throttle repeated logs (1 minute cooldown)
+        const now = Date.now();
+        const throttleMs = 60 * 1000;
         if (heapUsedMB >= this.thresholds.memory.emergency) {
-            console.error(`[PerfMonitor] 🚨 EMERGENCY: Memory usage at ${heapUsedMB}MB (threshold: ${this.thresholds.memory.emergency}MB)`);
+            if (now - this._lastMemoryWarningAt > throttleMs) {
+                console.error(`[PerfMonitor] 🚨 EMERGENCY: Memory usage at ${heapUsedMB}MB (threshold: ${this.thresholds.memory.emergency}MB)`);
+                this._lastMemoryWarningAt = now;
+            }
         } else if (heapUsedMB >= this.thresholds.memory.critical) {
-            console.warn(`[PerfMonitor] ⚠️ CRITICAL: Memory usage at ${heapUsedMB}MB (threshold: ${this.thresholds.memory.critical}MB)`);
+            if (now - this._lastMemoryWarningAt > throttleMs) {
+                console.warn(`[PerfMonitor] ⚠️ CRITICAL: Memory usage at ${heapUsedMB}MB (threshold: ${this.thresholds.memory.critical}MB)`);
+                this._lastMemoryWarningAt = now;
+            }
         } else if (heapUsedMB >= this.thresholds.memory.warning) {
-            console.warn(`[PerfMonitor] ⚠️ WARNING: Memory usage at ${heapUsedMB}MB (threshold: ${this.thresholds.memory.warning}MB)`);
+            if (now - this._lastMemoryWarningAt > throttleMs) {
+                console.warn(`[PerfMonitor] ⚠️ WARNING: Memory usage at ${heapUsedMB}MB (threshold: ${this.thresholds.memory.warning}MB)`);
+                this._lastMemoryWarningAt = now;
+            }
         }
 
         // Log status every 5 minutes

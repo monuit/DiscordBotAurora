@@ -441,7 +441,10 @@ async function handleRemoveChannel(i, interaction, client) {
 // Prefetch queue status - admin-only
 async function handlePrefetchQueueStatus(i, interaction, client) {
     try {
-        await i.deferReply({ ephemeral: true });
+        // If the interaction was already acknowledged (deferUpdate called by the menu handler),
+        // we must not call deferReply again — use followUp instead.
+        const alreadyAck = Boolean(i.deferred || i.replied);
+        if (!alreadyAck) await i.deferReply({ ephemeral: true });
     const axios = require('axios');
     const PrefetchedLink = require('../../settings/models/PrefetchedLink');
         // Summarize counts by category for redgifs
@@ -473,8 +476,12 @@ async function handlePrefetchQueueStatus(i, interaction, client) {
             .setDescription('Counts and up to 3 sample URLs per category')
             .addFields(fields.slice(0, 24)); // Discord embed limit
 
-        // Post ephemeral reply to the admin
-        await i.editReply({ embeds: [embed] });
+        // Post ephemeral reply to the admin. Use followUp when already acknowledged.
+        if (i.deferred || i.replied) {
+            await i.followUp({ embeds: [embed], ephemeral: true });
+        } else {
+            await i.editReply({ embeds: [embed] });
+        }
 
         // Also POST a compact summary to the configured GUILD_LOGS webhook for visibility
         try {

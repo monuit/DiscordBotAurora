@@ -5,6 +5,9 @@ const PrefetchedLinkSchema = new mongoose.Schema({
     urlHash: { type: String, required: true, unique: true, index: true },
     source: { type: String, required: true, index: true },
     category: { type: String, required: true, index: true },
+        // Channel and guild scoping so prefetched items are unambiguously tied to a posting target
+        channelId: { type: String, required: false, index: true },
+        guildId: { type: String, required: false, index: true },
     title: String,
     thumbnail: String,
     description: String,
@@ -29,6 +32,9 @@ PrefetchedLinkSchema.index({ claimed: 1, claimedAt: 1 });
 // Track failures for quick cleanup decisions
 PrefetchedLinkSchema.index({ failedAttempts: 1 });
 // Index to speed up claiming/pop operations by source, category and fetch time
-PrefetchedLinkSchema.index({ source: 1, category: 1, fetchedAt: 1 });
+PrefetchedLinkSchema.index({ source: 1, category: 1, channelId: 1, fetchedAt: 1 });
+
+// Also index by channel/guild for quick counts and lookups
+PrefetchedLinkSchema.index({ channelId: 1, category: 1, source: 1 });
 
 module.exports = mongoose.model('PrefetchedLink', PrefetchedLinkSchema);

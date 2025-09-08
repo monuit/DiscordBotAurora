@@ -137,6 +137,7 @@ class AutoWebScrapeSender {
                 const now = new Date();
                 const soon = new Date(now.getTime() + 60 * 1000);
                 const configs = await AutoPostConfig.find({ isRunning: true, suspended: false, nextPostTime: { $lte: soon, $gte: now } }).limit(this.batchSize);
+                if (configs && configs.length) console.log(`[AutoWebScrape] DB Config Polling found ${configs.length} configs: ${configs.map(c => `${c.configId || c.id || 'n/a'}->${c.channelId}`).join(', ')}`);
                 for (const cfg of configs) {
                     if (!this.activeAutoPosts.has(cfg.configId)) {
                         this.activeAutoPosts.set(cfg.configId, cfg);
@@ -175,9 +176,9 @@ class AutoWebScrapeSender {
             const perFetch = Math.max(this.prefetchPerFetch || this.prefetchCount, this.prefetchCount);
             const seenHashes = new Set();
 
-            // Check how many prefetched links already exist for this category/channel
+            // Check how many prefetched links already exist for this category/channel (scoped to channel)
             try {
-                const existingCount = await PrefetchedLink.countDocuments({ source: 'redgifs', category: config.category });
+                const existingCount = await PrefetchedLink.countDocuments({ source: 'redgifs', category: config.category, channelId: config.channelId });
                 if (existingCount >= minBuffer) return; // buffer already satisfied
             } catch (err) { /* ignore and continue fetching */ }
 
@@ -205,7 +206,8 @@ class AutoWebScrapeSender {
                 const now = new Date();
                 const [posted, prefetched] = await Promise.all([
                     PostedContent.find({ urlHash: { $in: hashes }, availableAfter: { $gt: now } }).select('urlHash').lean().catch(() => []),
-                    PrefetchedLink.find({ urlHash: { $in: hashes } }).select('urlHash').lean().catch(() => [])
+                    // Consider prefetched entries that are either scoped to this channel or legacy entries without channelId
+                    PrefetchedLink.find({ urlHash: { $in: hashes }, $or: [{ channelId: config.channelId }, { channelId: { $exists: false } }] }).select('urlHash').lean().catch(() => [])
                 ]);
                 const blocked = new Set(((posted || []).map(r => r.urlHash)).concat(((prefetched || []).map(r => r.urlHash))));
 
@@ -219,6 +221,9 @@ class AutoWebScrapeSender {
                         urlHash: h,
                         source: 'redgifs',
                         category: config.category,
+                        // tie prefetched items to the exact posting target
+                        channelId: config.channelId,
+                        guildId: config.guildId,
                         title: item.title,
                         thumbnail: item.thumbnail,
                         description: item.description
@@ -234,7 +239,7 @@ class AutoWebScrapeSender {
 
                 // Check if buffer is now satisfied
                 try {
-                    const newCount = await PrefetchedLink.countDocuments({ source: 'redgifs', category: config.category });
+                    const newCount = await PrefetchedLink.countDocuments({ source: 'redgifs', category: config.category, channelId: config.channelId });
                     if (newCount >= minBuffer) break;
                 } catch (e) { /* continue attempts */ }
             }
@@ -245,9 +250,24 @@ class AutoWebScrapeSender {
         if (this.activePosts.size >= this.maxConcurrentPosts) return;
         const postId = `${config.channelId}_${config.source}_${config.category}_${Date.now()}`;
         this.activePosts.add(postId);
-    try {
-            const channel = await this.client.channels.fetch(config.channelId);
-            if (!channel) throw new Error(`Channel ${config.channelId} not found`);
+        try {
+            // Diagnostic: attempt cache first, then fetch; log context to help diagnose "Unknown Channel"
+            let channel = this.client.channels.cache.get(config.channelId);
+            console.log(`[AutoWebScrape] Resolving channel for DB-backed post - configId=${config.configId || config.id || 'n/a'} channelId=${config.channelId} guildId=${config.guildId || 'n/a'} cached=${!!channel}`);
+            if (!channel) {
+                try {
+                    channel = await this.client.channels.fetch(config.channelId);
+                    console.log(`[AutoWebScrape] client.channels.fetch succeeded for channelId=${config.channelId}`);
+                } catch (fetchErr) {
+                    console.error(`[AutoWebScrape] client.channels.fetch failed for channelId=${config.channelId}:`, fetchErr && fetchErr.stack ? fetchErr.stack : fetchErr);
+                    try {
+                        const guild = this.client.guilds.cache.get(config.guildId);
+                        if (guild) console.log(`[AutoWebScrape] Guild ${config.guildId} present in cache, channels cached=${guild.channels && guild.channels.cache ? guild.channels.cache.size : 'unknown'}`);
+                        else console.log(`[AutoWebScrape] Guild ${config.guildId} NOT present in cache`);
+                    } catch (e) { /* ignore inspection errors */ }
+                    throw new Error(`Unknown Channel: ${config.channelId}`);
+                }
+            }
             let content;
             let claimedDoc = null;
             if (config.source === 'redgifs') {
@@ -272,7 +292,9 @@ class AutoWebScrapeSender {
                             const maxLoop = Math.max(4, this.prefetchMaxAttempts || 6);
                             while (!content && attempts < maxLoop) {
                                 const workerId2 = `${process.pid}_${Date.now()}_${attempts}`;
-                                const next = await PrefetchedLink.findOneAndUpdate({ source: 'redgifs', category: config.category, claimed: false }, { $set: { claimed: true, claimedBy: workerId2, claimedAt: new Date(), lastAttemptAt: new Date() }, $inc: { attempts: 1 } }, { sort: { fetchedAt: 1 }, returnDocument: 'after' }).lean().catch(() => null);
+                                // attempt channel-scoped first, then legacy
+                                let next = await PrefetchedLink.findOneAndUpdate({ source: 'redgifs', category: config.category, channelId: config.channelId, claimed: false }, { $set: { claimed: true, claimedBy: workerId2, claimedAt: new Date(), lastAttemptAt: new Date() }, $inc: { attempts: 1 } }, { sort: { fetchedAt: 1 }, returnDocument: 'after' }).lean().catch(() => null);
+                                if (!next) next = await PrefetchedLink.findOneAndUpdate({ source: 'redgifs', category: config.category, channelId: { $exists: false }, claimed: false }, { $set: { claimed: true, claimedBy: workerId2, claimedAt: new Date(), lastAttemptAt: new Date() }, $inc: { attempts: 1 } }, { sort: { fetchedAt: 1 }, returnDocument: 'after' }).lean().catch(() => null);
                                 attempts++;
                                 if (!next) break;
                                 const can2 = await PostedContent.canPostContent(next.url, 'redgifs', config.category, config.channelId).catch(() => ({ canPost: true }));
@@ -379,9 +401,25 @@ class AutoWebScrapeSender {
         const startTime = Date.now();
         this.activePosts.add(postId);
     let claimedDoc = null;
-    try {
+        try {
             const memUsage = process.memoryUsage(); const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024); if (heapUsedMB > 95) { console.warn(`[AutoWebScrape] High memory usage (${heapUsedMB}MB), skipping post`); return; }
-            const channel = await this.client.channels.fetch(config.channelId); if (!channel) throw new Error(`Channel ${config.channelId} not found`);
+            // Diagnostic: prefer cache then fetch; provide contextual logs to diagnose missing/cached channels
+            let channel = this.client.channels.cache.get(config.channelId);
+            console.log(`[AutoWebScrape] Resolving channel for auto-post - id=${config.id || config.configId || 'n/a'} channelId=${config.channelId} guildId=${config.guildId || 'n/a'} cached=${!!channel}`);
+            if (!channel) {
+                try {
+                    channel = await this.client.channels.fetch(config.channelId);
+                    console.log(`[AutoWebScrape] client.channels.fetch succeeded for channelId=${config.channelId}`);
+                } catch (fetchErr) {
+                    console.error(`[AutoWebScrape] client.channels.fetch failed for channelId=${config.channelId}:`, fetchErr && fetchErr.stack ? fetchErr.stack : fetchErr);
+                    try {
+                        const guild = this.client.guilds.cache.get(config.guildId);
+                        if (guild) console.log(`[AutoWebScrape] Guild ${config.guildId} present in cache, channels cached=${guild.channels && guild.channels.cache ? guild.channels.cache.size : 'unknown'}`);
+                        else console.log(`[AutoWebScrape] Guild ${config.guildId} NOT present in cache`);
+                    } catch (e) { /* ignore inspection errors */ }
+                    throw new Error(`Unknown Channel: ${config.channelId}`);
+                }
+            }
             const now = Date.now(); const lastApiCall = this.lastApiCalls.get(config.source) || 0; const timeSinceLastCall = now - lastApiCall; if (timeSinceLastCall < this.minApiGap) { await new Promise(r => setTimeout(r, this.minApiGap - timeSinceLastCall)); }
             this.lastApiCalls.set(config.source, Date.now());
             let contentPromise;
@@ -391,7 +429,9 @@ class AutoWebScrapeSender {
                         contentPromise = (async () => {
                             try {
                                         const workerId = `${process.pid}_${Date.now()}`;
-                                        const popped = await PrefetchedLink.findOneAndUpdate({ source: 'redgifs', category: config.category, claimed: false }, { $set: { claimed: true, claimedBy: workerId, claimedAt: new Date(), lastAttemptAt: new Date() }, $inc: { attempts: 1 } }, { sort: { fetchedAt: 1 }, returnDocument: 'after' }).lean().catch(() => null);
+                                        // Prefer channel-scoped prefetched items, fall back to legacy unscoped entries
+                                        let popped = await PrefetchedLink.findOneAndUpdate({ source: 'redgifs', category: config.category, channelId: config.channelId, claimed: false }, { $set: { claimed: true, claimedBy: workerId, claimedAt: new Date(), lastAttemptAt: new Date() }, $inc: { attempts: 1 } }, { sort: { fetchedAt: 1 }, returnDocument: 'after' }).lean().catch(() => null);
+                                        if (!popped) popped = await PrefetchedLink.findOneAndUpdate({ source: 'redgifs', category: config.category, channelId: { $exists: false }, claimed: false }, { $set: { claimed: true, claimedBy: workerId, claimedAt: new Date(), lastAttemptAt: new Date() }, $inc: { attempts: 1 } }, { sort: { fetchedAt: 1 }, returnDocument: 'after' }).lean().catch(() => null);
                                         if (popped && popped.url) {
                                             claimedDoc = popped;
                                             const can = await PostedContent.canPostContent(popped.url, 'redgifs', config.category, config.channelId).catch(() => ({ canPost: true }));

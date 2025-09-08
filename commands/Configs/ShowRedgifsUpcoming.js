@@ -13,7 +13,7 @@ module.exports = {
                 return;
             }
 
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({ flags: 64 });
 
             // Fetch up to 10 upcoming redgifs (oldest first)
             const items = await PrefetchedLink.find({ source: 'redgifs' })

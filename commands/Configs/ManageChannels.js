@@ -445,7 +445,7 @@ async function handlePrefetchQueueStatus(i, interaction, client) {
         // If the interaction was already acknowledged (deferUpdate called by the menu handler),
         // we must not call deferReply again — use followUp instead.
         const alreadyAck = Boolean(i.deferred || i.replied);
-        if (!alreadyAck) await i.deferReply({ ephemeral: true });
+    if (!alreadyAck) await i.deferReply({ flags: 64 });
     const axios = require('axios');
     const PrefetchedLink = require('../../settings/models/PrefetchedLink');
         // Summarize counts by category for redgifs
@@ -458,7 +458,7 @@ async function handlePrefetchQueueStatus(i, interaction, client) {
         if (!agg || agg.length === 0) {
             const emptyEmbed = new EmbedBuilder().setDescription('✅ Prefetch queue is empty for Redgifs.').setColor('#00ff00');
             try {
-                if (i.deferred || i.replied) await i.followUp({ embeds: [emptyEmbed], ephemeral: true });
+                if (i.deferred || i.replied) await i.followUp({ embeds: [emptyEmbed], flags: 64 });
                 else await i.editReply({ embeds: [emptyEmbed] });
             } catch (e) {
                 // ignore Unknown Message / already replied errors
@@ -486,7 +486,7 @@ async function handlePrefetchQueueStatus(i, interaction, client) {
         // Post ephemeral reply to the admin. Use followUp when already acknowledged.
         try {
             if (i.deferred || i.replied) {
-                await i.followUp({ embeds: [embed], ephemeral: true });
+                await i.followUp({ embeds: [embed], flags: 64 });
             } else {
                 await i.editReply({ embeds: [embed] });
             }
@@ -507,7 +507,7 @@ async function handlePrefetchQueueStatus(i, interaction, client) {
         console.error('Error fetching prefetch queue status:', err);
             const errorEmbed = new EmbedBuilder().setDescription('❌ Failed to fetch prefetch queue status').setColor('#ff0000');
             try {
-                if (i.deferred || i.replied) await i.followUp({ embeds: [errorEmbed], ephemeral: true });
+                if (i.deferred || i.replied) await i.followUp({ embeds: [errorEmbed], flags: 64 });
                 else await i.editReply({ embeds: [errorEmbed] });
             } catch (e) {
                 if (!e || !e.code || (e.code !== 10008 && e.code !== 'InteractionAlreadyReplied')) console.error('Failed to send prefetch error:', e);

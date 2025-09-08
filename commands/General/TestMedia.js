@@ -55,7 +55,7 @@ module.exports = {
 
     run: async (interaction, client) => {
     // Defer reply so we have time for downloads/transcoding if needed
-    await interaction.deferReply({ ephemeral: true }).catch(() => {});
+    await interaction.deferReply({ flags: 64 }).catch(() => {});
         const source = interaction.options.getString('source');
         const category = interaction.options.getString('category') || 'hot';
         const debug = interaction.options.getBoolean('debug') || false;

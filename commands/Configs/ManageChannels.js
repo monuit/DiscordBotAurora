@@ -3,6 +3,7 @@ const AllowedChannels = require('../../settings/models/AllowedChannels');
 const WhitelistRoles = require('../../settings/models/WhitelistRoles');
 const AccessControlRoles = require('../../settings/models/AccessControlRoles');
 const RoleAccessControl = require('../../utils/roleAccessControl');
+const { SAFE_MODE } = require('../../config/safeMode');
 
 module.exports = {
     name: ["manage-channels"],
@@ -548,8 +549,7 @@ async function handleListChannels(i, interaction, client) {
 }
 
 async function handleEnableAll(i, interaction, client) {
-    const safeMode = String(process.env.DISABLE_DESTRUCTIVE_ACTIONS || 'false').toLowerCase() === 'true';
-    if (safeMode) {
+    if (SAFE_MODE) {
         const blockedEmbed = new EmbedBuilder()
             .setDescription("⚠️ Bulk-enable blocked by server safety settings (DISABLE_DESTRUCTIVE_ACTIONS=true). Please temporarily disable this flag to perform bulk operations.")
             .setColor("#ffaa00");
@@ -570,8 +570,7 @@ async function handleEnableAll(i, interaction, client) {
 }
 
 async function handleReset(i, interaction, client) {
-    const safeMode = String(process.env.DISABLE_DESTRUCTIVE_ACTIONS || 'false').toLowerCase() === 'true';
-    if (safeMode) {
+    if (SAFE_MODE) {
         const blockedEmbed = new EmbedBuilder()
             .setDescription("⚠️ Reset (clear) blocked by server safety settings (DISABLE_DESTRUCTIVE_ACTIONS=true). Please temporarily disable this flag to perform bulk operations.")
             .setColor("#ffaa00");

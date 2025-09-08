@@ -1,5 +1,6 @@
 const { EmbedBuilder, WebhookClient, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const AutoPromoConfig = require('../settings/models/AutoPromoConfig');
+const { SAFE_MODE } = require('../config/safeMode');
 
 class AutoPromoSender {
     constructor(client) {
@@ -62,19 +63,11 @@ class AutoPromoSender {
                 console.error(`[AutoPromo] Role promo channel ${this.rolePromoConfig.channelId} not found`);
                 return false;
             }
-
-            // Delete the previous promotional message if it exists
-            if (this.rolePromoConfig.lastMessageId) {
-                try {
-                    const previousMessage = await channel.messages.fetch(this.rolePromoConfig.lastMessageId);
-                    if (previousMessage) {
-                        await previousMessage.delete();
-                        console.log(`[AutoPromo] Deleted previous role promo message ${this.rolePromoConfig.lastMessageId}`);
-                    }
-                } catch (error) {
-                    console.log(`[AutoPromo] Could not delete previous role promo message ${this.rolePromoConfig.lastMessageId}: ${error.message}`);
-                }
-                this.rolePromoConfig.lastMessageId = null;
+            // Try to clear any previous promo messages first (respecting DISABLE_DESTRUCTIVE_ACTIONS)
+            try {
+                await this.clearRolePromoMessages();
+            } catch (e) {
+                console.warn('[AutoPromo] clearRolePromoMessages failed before sending role promo:', e && e.message ? e.message : e);
             }
 
             const message = this.getRolePromoMessage();
@@ -106,6 +99,7 @@ class AutoPromoSender {
                 if (cfg) {
                     cfg.lastSentAt = new Date();
                     cfg.nextSendAt = new Date(Date.now() + this.getRolePromoInterval());
+                    cfg.lastMessageId = sentMessage.id;
                     await cfg.save();
                 }
             } catch (e) {
@@ -130,19 +124,11 @@ class AutoPromoSender {
                 console.error(`[AutoPromo] Premium promo channel ${this.premiumPromoConfig.channelId} not found`);
                 return false;
             }
-
-            // Delete the previous promotional message if it exists
-            if (this.premiumPromoConfig.lastMessageId) {
-                try {
-                    const previousMessage = await channel.messages.fetch(this.premiumPromoConfig.lastMessageId);
-                    if (previousMessage) {
-                        await previousMessage.delete();
-                        console.log(`[AutoPromo] Deleted previous premium promo message ${this.premiumPromoConfig.lastMessageId}`);
-                    }
-                } catch (error) {
-                    console.log(`[AutoPromo] Could not delete previous premium promo message ${this.premiumPromoConfig.lastMessageId}: ${error.message}`);
-                }
-                this.premiumPromoConfig.lastMessageId = null;
+            // Try to clear any previous premium promo messages first (respecting DISABLE_DESTRUCTIVE_ACTIONS)
+            try {
+                await this.clearPremiumPromoMessages();
+            } catch (e) {
+                console.warn('[AutoPromo] clearPremiumPromoMessages failed before sending premium promo:', e && e.message ? e.message : e);
             }
 
             const message = this.getPremiumPromoMessage();
@@ -175,6 +161,7 @@ class AutoPromoSender {
                 if (cfg) {
                     cfg.lastSentAt = new Date();
                     cfg.nextSendAt = new Date(Date.now() + this.getPremiumPromoInterval());
+                    cfg.lastMessageId = sentMessage.id;
                     await cfg.save();
                 }
             } catch (e) {
@@ -269,10 +256,9 @@ class AutoPromoSender {
      */
     async clearRolePromoMessages() {
         try {
-            // Safety: if destructive actions are disabled via env, skip cleanup
-            const safeMode = String(process.env.DISABLE_DESTRUCTIVE_ACTIONS || 'false').toLowerCase() === 'true';
-            if (safeMode) {
-                console.log('[AutoPromo] Skipping role promo cleanup because DISABLE_DESTRUCTIVE_ACTIONS is enabled');
+            // Startup-safe mode: skip cleanup if destructive actions disabled at startup
+            if (SAFE_MODE) {
+                console.log('[AutoPromo] Skipping role promo cleanup because startup SAFE_MODE is enabled');
                 return;
             }
             const channel = await this.client.channels.fetch(this.rolePromoConfig.channelId);
@@ -319,10 +305,9 @@ class AutoPromoSender {
      */
     async clearPremiumPromoMessages() {
         try {
-            // Safety: skip cleanup if destructive actions disabled
-            const safeMode = String(process.env.DISABLE_DESTRUCTIVE_ACTIONS || 'false').toLowerCase() === 'true';
-            if (safeMode) {
-                console.log('[AutoPromo] Skipping premium promo cleanup because DISABLE_DESTRUCTIVE_ACTIONS is enabled');
+            // Startup-safe mode: skip cleanup if destructive actions disabled at startup
+            if (SAFE_MODE) {
+                console.log('[AutoPromo] Skipping premium promo cleanup because startup SAFE_MODE is enabled');
                 return;
             }
             const channel = await this.client.channels.fetch(this.premiumPromoConfig.channelId);

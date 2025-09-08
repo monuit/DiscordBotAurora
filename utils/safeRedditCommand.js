@@ -47,7 +47,7 @@ async function safeRedditCommand(interaction, commandLogic, commandName = 'Reddi
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({ 
                     content: '❌ Something went wrong. Please try again.', 
-                    ephemeral: true 
+                    flags: 64 
                 });
             } else if (interaction.deferred) {
                 await interaction.editReply({ 

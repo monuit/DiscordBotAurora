@@ -14,7 +14,7 @@ module.exports = {
                 const noPermEmbed = new EmbedBuilder()
                     .setDescription("❌ **Access Denied**\n\nYou need **Administrator** permission to use this command.")
                     .setColor("#ff0000");
-                await interaction.reply({ embeds: [noPermEmbed], ephemeral: true });
+                await interaction.reply({ embeds: [noPermEmbed], flags: 64 });
                 return;
             }
 
@@ -83,6 +83,11 @@ module.exports = {
                         .setValue('autopromo_status')
                         .setDescription('View auto-promotional system status')
                         .setEmoji('📊'),
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel('Prefetch Queue Status')
+                        .setValue('prefetch_queue_status')
+                        .setDescription('View DB-backed prefetch queue depths and samples')
+                        .setEmoji('🧾'),
                     new StringSelectMenuOptionBuilder()
                         .setLabel('Start Auto-Promo')
                         .setValue('autopromo_start')
@@ -194,6 +199,9 @@ module.exports = {
                         case 'autopromo_status':
                             await handleAutoPromoStatus(i, interaction, client);
                             break;
+                            case 'prefetch_queue_status':
+                                await handlePrefetchQueueStatus(i, interaction, client);
+                                break;
                         case 'autopromo_start':
                             await handleAutoPromoStart(i, interaction, client);
                             break;
@@ -232,7 +240,7 @@ module.exports = {
             if (interaction.replied || interaction.deferred) {
                 await interaction.editReply({ embeds: [errorEmbed], components: [] }).catch(console.error);
             } else {
-                await interaction.reply({ embeds: [errorEmbed], ephemeral: true }).catch(console.error);
+                await interaction.reply({ embeds: [errorEmbed], flags: 64 }).catch(console.error);
             }
         }
     }
@@ -430,6 +438,59 @@ async function handleRemoveChannel(i, interaction, client) {
     });
 }
 
+// Prefetch queue status - admin-only
+async function handlePrefetchQueueStatus(i, interaction, client) {
+    try {
+        await i.deferReply({ ephemeral: true });
+    const axios = require('axios');
+    const PrefetchedLink = require('../../settings/models/PrefetchedLink');
+        // Summarize counts by category for redgifs
+        const agg = await PrefetchedLink.aggregate([
+            { $match: { source: 'redgifs' } },
+            { $group: { _id: '$category', count: { $sum: 1 } } },
+            { $sort: { count: -1 } }
+        ]).limit(50).exec();
+
+        if (!agg || agg.length === 0) {
+            const emptyEmbed = new EmbedBuilder().setDescription('✅ Prefetch queue is empty for Redgifs.').setColor('#00ff00');
+            await i.editReply({ embeds: [emptyEmbed] });
+            return;
+        }
+
+        const fields = [];
+        for (const row of agg) {
+            const cat = row._id || 'unknown';
+            const cnt = row.count || 0;
+            // fetch up to 3 sample URLs for this category
+            const samples = await PrefetchedLink.find({ source: 'redgifs', category: cat }).sort({ fetchedAt: 1 }).limit(3).lean();
+            const urls = samples.map(s => s.url).join('\n');
+            fields.push({ name: `${cat} (${cnt})`, value: urls || 'No sample URLs', inline: false });
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle('Prefetch Queue Status (Redgifs)')
+            .setColor('#0099ff')
+            .setDescription('Counts and up to 3 sample URLs per category')
+            .addFields(fields.slice(0, 24)); // Discord embed limit
+
+        // Post ephemeral reply to the admin
+        await i.editReply({ embeds: [embed] });
+
+        // Also POST a compact summary to the configured GUILD_LOGS webhook for visibility
+        try {
+            const webhook = process.env.GUILD_LOGS;
+            if (webhook) {
+                const content = agg.slice(0, 20).map(r => `${r._id}: ${r.count}`).join('\n');
+                await axios.post(webhook, { content: `Prefetch Queue Summary (Redgifs)\n\n${content}` }).catch(() => null);
+            }
+        } catch (e) { /* ignore webhook failures */ }
+    } catch (err) {
+        console.error('Error fetching prefetch queue status:', err);
+        const errorEmbed = new EmbedBuilder().setDescription('❌ Failed to fetch prefetch queue status').setColor('#ff0000');
+        try { await i.editReply({ embeds: [errorEmbed] }); } catch (e) { console.error(e); }
+    }
+}
+
 async function handleListChannels(i, interaction, client) {
     const allowedChannels = await AllowedChannels.find({
         guildId: interaction.guild.id,
@@ -464,6 +525,15 @@ async function handleListChannels(i, interaction, client) {
 }
 
 async function handleEnableAll(i, interaction, client) {
+    const safeMode = String(process.env.DISABLE_DESTRUCTIVE_ACTIONS || 'false').toLowerCase() === 'true';
+    if (safeMode) {
+        const blockedEmbed = new EmbedBuilder()
+            .setDescription("⚠️ Bulk-enable blocked by server safety settings (DISABLE_DESTRUCTIVE_ACTIONS=true). Please temporarily disable this flag to perform bulk operations.")
+            .setColor("#ffaa00");
+        await i.editReply({ embeds: [blockedEmbed], components: [] });
+        return;
+    }
+
     const deleteResult = await AllowedChannels.deleteMany({ guildId: interaction.guild.id });
 
     const enableEmbed = new EmbedBuilder()
@@ -477,6 +547,15 @@ async function handleEnableAll(i, interaction, client) {
 }
 
 async function handleReset(i, interaction, client) {
+    const safeMode = String(process.env.DISABLE_DESTRUCTIVE_ACTIONS || 'false').toLowerCase() === 'true';
+    if (safeMode) {
+        const blockedEmbed = new EmbedBuilder()
+            .setDescription("⚠️ Reset (clear) blocked by server safety settings (DISABLE_DESTRUCTIVE_ACTIONS=true). Please temporarily disable this flag to perform bulk operations.")
+            .setColor("#ffaa00");
+        await i.editReply({ embeds: [blockedEmbed], components: [] });
+        return;
+    }
+
     const deleteResult = await AllowedChannels.deleteMany({ guildId: interaction.guild.id });
 
     const resetEmbed = new EmbedBuilder()

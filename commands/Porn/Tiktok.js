@@ -7,7 +7,7 @@ module.exports = {
     name: ["tiktok-disabled"],
     description: "TikTok command has been disabled",
     run: async (interaction, client, user, language) => {
-        await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 });
         
         const disabledEmbed = new EmbedBuilder()
             .setDescription("❌ TikTok command has been disabled due to reliability issues.")

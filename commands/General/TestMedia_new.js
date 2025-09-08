@@ -63,7 +63,7 @@ module.exports = {
                 .setDescription('You need **Administrator** or **Manage Channels** permissions to test media functionality.')
                 .setTimestamp();
 
-            return await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+            return await interaction.reply({ embeds: [errorEmbed], flags: 64 });
         }
 
         await interaction.deferReply();

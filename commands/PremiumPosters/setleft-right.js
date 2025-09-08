@@ -24,7 +24,7 @@ module.exports = {
                     .setColor(client.color)
                 return await interaction.editReply({
                     embeds: [perm],
-                    ephemeral: true
+                    flags: 64
                 })
             }
 
@@ -35,7 +35,7 @@ module.exports = {
                 return await
                     interaction.editReply({
                         embeds: [perm],
-                        ephemeral: true
+                        flags: 64
                     })
             }
 

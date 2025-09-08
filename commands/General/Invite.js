@@ -9,6 +9,6 @@ module.exports = {
             .setColor(client.color)
             .setFooter({ text: "Private Instance" });
 
-        interaction.reply({ embeds: [embed], ephemeral: true });
+    interaction.reply({ embeds: [embed], flags: 64 });
     }
 }

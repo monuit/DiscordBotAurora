@@ -1,931 +1,510 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const RedgifsRequester = require('./others/redgifs_requester');
+const UkdevilzRequester = require('./others/ukdevilz_requester');
+const UkdevilzAutoPost = require('./ukdevilzAutoPost');
 const XTwitterRequester = require('./others/x_twitter_requester');
 const PostedContent = require('../settings/models/PostedContent');
+const PrefetchedLink = require('../settings/models/PrefetchedLink');
+const AutoPostConfig = require('../settings/models/AutoPostConfig');
 const performanceMonitor = require('../utils/performanceMonitor');
 
 class AutoWebScrapeSender {
     constructor(client) {
         this.client = client;
-        this.redgifsRequester = new RedgifsRequester();
-        this.xTwitterRequester = new XTwitterRequester();
-        
-        // Active auto-post configurations with optimized memory management
+    this.redgifsRequester = new RedgifsRequester();
+    this.ukdevilzRequester = new UkdevilzRequester();
+    this.ukdevilzAuto = new UkdevilzAutoPost(client);
+    this.xTwitterRequester = new XTwitterRequester();
+
         this.activeAutoPosts = new Map();
-        
-        // Supported sources
-        this.supportedSources = ['redgifs', 'x', 'twitter'];
-        
-        // OPTIMIZED FOR 100 CHANNELS: Increased intervals to handle scale
-        this.minInterval = 15 * 60 * 1000;  // 15 minutes minimum (reduced from 20)
-        this.maxInterval = 35 * 60 * 1000;  // 35 minutes maximum (reduced from 45)
-        
-        // API call tracking with optimized cleanup for scale
-        this.lastApiCalls = new Map(); 
-        this.minApiGap = 45 * 1000; // Reduced to 45 seconds for better throughput
-        
-        // PERFORMANCE OPTIMIZATION: Scaled for 100 channels
-        this.maxConcurrentPosts = 8; // Increased from 3 for better throughput
-        this.activePosts = new Set(); // Track active posting operations
-        
-        // MEMORY OPTIMIZATION: Scaled limits for 100 channels
+        this.supportedSources = ['redgifs', 'x', 'twitter', 'ukdevilz'];
+
+        this.minInterval = 15 * 60 * 1000;
+        this.maxInterval = 35 * 60 * 1000;
+
+        this.lastApiCalls = new Map();
+        this.minApiGap = 45 * 1000;
+        this.maxConcurrentPosts = 8;
+        this.activePosts = new Set();
+
         this.cleanupInterval = null;
-        this.maxActiveConfigs = 100; // Increased from 10 to 100 as requested
-        
-        // CONTENT DEDUPLICATION: Track posted content
-        this.contentCache = new Map(); // In-memory cache for faster lookups
-        this.maxCacheSize = 1000; // Limit cache size
-        
-        // PERFORMANCE: Batch operations for efficiency
-        this.batchSize = 5; // Process in batches
+        this.maxActiveConfigs = 100;
+
+        this.contentCache = new Map();
+        this.maxCacheSize = 1000;
+
+    // Prefetch settings for Redgifs
+    // Prefetch tuning
+    this.prefetchCount = 6; // batch fetch size per attempt (slightly larger to reduce DB round-trips)
+    this.prefetchBeforeMs = 60 * 1000; // prefetch 1 minute before scheduled post
+    this.prefetchBufferSize = 10; // maintain at least this many links in DB per category
+    this.postCacheClearMs = 60 * 1000; // delay window after posting before aggressive cleanup
+    this.prefetchMaxAttempts = 6; // cap attempts while trying to fill buffer
+    this.prefetchPerFetch = 8; // items requested per fetch attempt
+    this.claimStaleMs = 3 * 60 * 1000; // 3 minutes - stale claim threshold
+    this.claimReaperIntervalMs = 60 * 1000; // run reaper every 60s
+
+        this.batchSize = 5;
         this.processingQueue = [];
         this.isProcessingQueue = false;
-        
-        // System status
+
+        this.dbConfigPollingInterval = null;
         this.isInitialized = false;
-        
-        // MEMORY LEAK PREVENTION: Enhanced cleanup for scale
+    this._startClaimReaper();
+
         this.startMemoryCleanup();
     }
 
-    /**
-     * Enhanced memory cleanup for 100 channel scale
-     */
-    startMemoryCleanup() {
-        // Clear old API call tracking every 3 minutes (more frequent for scale)
-        this.cleanupInterval = setInterval(() => {
-            const now = Date.now();
-            const maxAge = 5 * 60 * 1000; // 5 minutes
-            
-            // Clean API call tracking
-            for (const [source, timestamp] of this.lastApiCalls.entries()) {
-                if (now - timestamp > maxAge) {
-                    this.lastApiCalls.delete(source);
-                }
-            }
-            
-            // Clean content cache if too large
-            if (this.contentCache.size > this.maxCacheSize) {
-                const entries = Array.from(this.contentCache.entries());
-                const toDelete = entries.slice(0, Math.floor(this.maxCacheSize * 0.3)); // Remove 30%
-                for (const [key] of toDelete) {
-                    this.contentCache.delete(key);
-                }
-                console.log(`[AutoWebScrape] Cleaned ${toDelete.length} cache entries`);
-            }
-            
-            // Force garbage collection hint for large scale
-            if (global.gc && this.activeAutoPosts.size > 50) {
-                global.gc();
-            }
-            
-            console.log(`[AutoWebScrape] Memory cleanup: ${this.activeAutoPosts.size} active configs, ${this.lastApiCalls.size} API tracks, ${this.contentCache.size} cached items`);
-        }, 3 * 60 * 1000); // Every 3 minutes (more frequent than before)
-    }
-
-    /**
-     * Initialize the auto web scrape system with enhanced performance for 100 channels
-     */
-    async start() {
-        if (this.isInitialized) {
-            console.log('[AutoWebScrape] System already initialized');
-            return;
-        }
-
-        try {
-            console.log('[AutoWebScrape] Initializing SCALED auto web scrape system for 100 channels...');
-            
-            // Check system resources before starting
-            const memUsage = process.memoryUsage();
-            const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-            
-            console.log(`[AutoWebScrape] Memory usage: ${heapUsedMB}MB heap`);
-            
-            // Dynamic scaling based on memory usage
-            if (heapUsedMB > 90) {
-                console.warn('[AutoWebScrape] High memory usage detected, reducing concurrent limits');
-                this.maxConcurrentPosts = 4;
-            } else if (heapUsedMB > 70) {
-                console.warn('[AutoWebScrape] Moderate memory usage, standard concurrent limits');
-                this.maxConcurrentPosts = 6;
-            } else {
-                console.log('[AutoWebScrape] Low memory usage, maximum concurrent limits');
-                this.maxConcurrentPosts = 8;
-            }
-            
-            // Initialize content deduplication system
-            try {
-                const stats = await PostedContent.getStats();
-                if (stats) {
-                    console.log(`[AutoWebScrape] Content tracking initialized - ${stats.total} total records, ${stats.last72h} in last 72h`);
-                } else {
-                    console.log('[AutoWebScrape] Content tracking initialized (empty database)');
-                }
-            } catch (error) {
-                console.warn('[AutoWebScrape] Content tracking initialization failed, continuing without:', error.message);
-            }
-            
-            // Initialize scrapers if enabled
-            if (process.env.ENABLE_REDGIFS === 'true') {
-                console.log('[AutoWebScrape] Redgifs scraping enabled (optimized for 100 channels)');
-            }
-            
-            if (process.env.ENABLE_X_TWITTER === 'true') {
-                console.log('[AutoWebScrape] X (Twitter) scraping enabled (optimized for 100 channels)');
-            }
-            
-            console.log('[AutoWebScrape] SCALED auto web scrape system initialized successfully');
-            
-            // Start performance monitoring for 100-channel scale
-            performanceMonitor.startMonitoring();
-            console.log('[AutoWebScrape] Performance monitoring enabled for 100-channel optimization');
-        } catch (error) {
-            console.error('[AutoWebScrape] Failed to initialize:', error.message);
-            throw error;
-        }
-    }
-
-    /**
-     * Start auto-posting for a specific source and category with memory limits
-     */
-    async startAutoPost(channelId, source, category, userId) {
-        const autoPostId = `${channelId}_${source}_${category}`;
-        
-        // MEMORY OPTIMIZATION: Check active configuration limits
-        if (this.activeAutoPosts.size >= this.maxActiveConfigs) {
-            throw new Error(`Maximum active auto-posts reached (${this.maxActiveConfigs}). Stop some existing auto-posts first.`);
-        }
-        
-        // Check if already running
-        if (this.activeAutoPosts.has(autoPostId)) {
-            throw new Error(`Auto ${source} ${category} is already running in this channel`);
-        }
-
-        // Validate source
-        if (!this.supportedSources.includes(source.toLowerCase())) {
-            throw new Error(`Unsupported source: ${source}. Supported sources: ${this.supportedSources.join(', ')}`);
-        }
-
-        // PERFORMANCE CHECK: Monitor system resources
+    adjustConcurrencyAndBatchLimits() {
         const memUsage = process.memoryUsage();
         const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-        
-        if (heapUsedMB > 90) {
-            throw new Error(`System memory too high (${heapUsedMB}MB). Please wait for memory to stabilize before starting new auto-posts.`);
+        if (heapUsedMB >= 160) this.maxConcurrentPosts = 3;
+        else if (heapUsedMB >= 140) this.maxConcurrentPosts = 4;
+        else if (heapUsedMB >= 120) this.maxConcurrentPosts = 6;
+        else this.maxConcurrentPosts = 8;
+
+        if (this.activeAutoPosts.size > 95) {
+            const configs = Array.from(this.activeAutoPosts.entries());
+            configs.sort((a, b) => {
+                const [, aCfg] = a;
+                const [, bCfg] = b;
+                if (aCfg.errorCount !== bCfg.errorCount) return aCfg.errorCount - bCfg.errorCount;
+                return (bCfg.postCount || 0) - (aCfg.postCount || 0);
+            });
+            const toPause = configs.slice(80);
+            for (const [, cfg] of toPause) {
+                cfg.suspended = true;
+                if (cfg.timeoutId) { clearTimeout(cfg.timeoutId); cfg.timeoutId = null; }
+            }
+            setTimeout(() => {
+                for (const [, cfg] of toPause) {
+                    if (cfg.isRunning) { cfg.suspended = false; cfg.errorCount = 0; }
+                }
+            }, 15 * 60 * 1000);
         }
+    }
 
-        // Create auto-post configuration
-        const config = {
-            id: autoPostId,
-            channelId: channelId,
-            source: source.toLowerCase(),
-            category: category.toLowerCase(),
-            userId: userId,
-            isRunning: true,
-            timeoutId: null,
-            startTime: Date.now(),
-            postCount: 0,
-            lastPost: null,
-            nextPostTime: null
-        };
+    cleanupCacheIfNeeded() {
+        if (this.contentCache.size > this.maxCacheSize) {
+            const entries = Array.from(this.contentCache.entries());
+            const toDelete = entries.slice(0, Math.floor(this.maxCacheSize * 0.3));
+            for (const [key] of toDelete) this.contentCache.delete(key);
+            console.log(`[AutoWebScrape] Aggressive cache cleanup: Removed ${toDelete.length} entries`);
+        }
+    }
 
-        // Store configuration
+    startMemoryCleanup() {
+        this.cleanupInterval = setInterval(() => {
+            const now = Date.now();
+            const maxAge = 5 * 60 * 1000;
+            for (const [source, timestamp] of this.lastApiCalls.entries()) {
+                if (now - timestamp > maxAge) this.lastApiCalls.delete(source);
+            }
+            if (this.contentCache.size > this.maxCacheSize) {
+                const entries = Array.from(this.contentCache.entries());
+                const toDelete = entries.slice(0, Math.floor(this.maxCacheSize * 0.3));
+                for (const [key] of toDelete) this.contentCache.delete(key);
+                console.log(`[AutoWebScrape] Cleaned ${toDelete.length} cache entries`);
+            }
+            if (global.gc && this.activeAutoPosts.size > 50) global.gc();
+            console.log(`[AutoWebScrape] Memory cleanup: ${this.activeAutoPosts.size} active configs, ${this.lastApiCalls.size} API tracks, ${this.contentCache.size} cached items`);
+        }, 3 * 60 * 1000);
+    }
+
+    async start() {
+        if (this.isInitialized) return;
+        try {
+            const memUsage = process.memoryUsage();
+            const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+            if (heapUsedMB > 90) this.maxConcurrentPosts = 4;
+            else if (heapUsedMB > 70) this.maxConcurrentPosts = 6;
+            else this.maxConcurrentPosts = 8;
+
+            try { const stats = await PostedContent.getStats(); if (stats) console.log(`[AutoWebScrape] Content tracking initialized - ${stats.total} total records`); } catch (e) {}
+            this.startDbConfigPolling();
+            performanceMonitor.startMonitoring();
+            this.isInitialized = true;
+        } catch (err) { console.error('[AutoWebScrape] Failed to initialize:', err.message); throw err; }
+    }
+
+    startDbConfigPolling() {
+        if (this.dbConfigPollingInterval) return;
+        this.dbConfigPollingInterval = setInterval(async () => {
+            try {
+                const now = new Date();
+                const soon = new Date(now.getTime() + 60 * 1000);
+                const configs = await AutoPostConfig.find({ isRunning: true, suspended: false, nextPostTime: { $lte: soon, $gte: now } }).limit(this.batchSize);
+                for (const cfg of configs) {
+                    if (!this.activeAutoPosts.has(cfg.configId)) {
+                        this.activeAutoPosts.set(cfg.configId, cfg);
+                        this.scheduleDbBackedPost(cfg);
+                        // Schedule prefetch for Redgifs if within prefetch window
+                        if (cfg.source === 'redgifs') this.schedulePrefetchIfNeeded(cfg);
+                    }
+                }
+            } catch (err) { console.error('[AutoWebScrape] DB config polling error:', err.message); }
+        }, 15000);
+    }
+
+    async scheduleDbBackedPost(config) {
+        if (!config.isRunning || config.suspended) return;
+        if (config.timeoutId) { clearTimeout(config.timeoutId); config.timeoutId = null; }
+        const now = new Date();
+        const delay = Math.max(0, config.nextPostTime - now);
+        // If this is a redgifs config, schedule prefetch before the post
+        if (config.source === 'redgifs') {
+            const prefetchDelay = Math.max(0, config.nextPostTime - new Date(Date.now() + this.prefetchBeforeMs));
+            setTimeout(() => this.schedulePrefetchIfNeeded(config), prefetchDelay);
+        }
+        config.timeoutId = setTimeout(async () => { config.timeoutId = null; try { await this.executeDbBackedAutoPost(config); } catch (e) { console.error('[AutoWebScrape] DB-backed auto-post error:', e.message); } finally { this.activeAutoPosts.delete(config.configId); } }, delay);
+    }
+
+    async schedulePrefetchIfNeeded(config) {
+        try {
+            if (!config || !config.configId) return;
+            const configId = config.configId || `${config.channelId}_${config.source}_${config.category}`;
+            if (this.tempPrefetch.has(configId)) return; // already prefetched
+            // attempt to prefetch until we have a minimum buffer of allowed items
+            console.log(`[AutoWebScrape] Prefetching up to ${this.prefetchCount} items (buffer target ${10}) for ${configId}`);
+            const crypto = require('crypto');
+            const minBuffer = this.prefetchBufferSize;
+            const maxAttempts = this.prefetchMaxAttempts || 6;
+            const perFetch = Math.max(this.prefetchPerFetch || this.prefetchCount, this.prefetchCount);
+            const seenHashes = new Set();
+
+            // Check how many prefetched links already exist for this category/channel
+            try {
+                const existingCount = await PrefetchedLink.countDocuments({ source: 'redgifs', category: config.category });
+                if (existingCount >= minBuffer) return; // buffer already satisfied
+            } catch (err) { /* ignore and continue fetching */ }
+
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                let items = [];
+                try { items = await this.redgifsRequester.getRandomBatch(config.category, perFetch); } catch (err) { items = []; }
+                if (!items || !items.length) continue;
+
+                // build urlHash list for batch DB checks
+                const hashToItem = new Map();
+                const hashes = [];
+                for (const it of items) {
+                    if (!it || !it.url) continue;
+                    const h = crypto.createHash('sha256').update(it.url).digest('hex');
+                    if (seenHashes.has(h)) continue;
+                    seenHashes.add(h);
+                    hashToItem.set(h, it);
+                    hashes.push(h);
+                }
+                if (!hashes.length) continue;
+
+                // Batch DB queries:
+                // 1) skip any URL already posted (PostedContent.availableAfter > now)
+                // 2) skip any URL already in PrefetchedLink (so we don't insert duplicates)
+                const now = new Date();
+                const [posted, prefetched] = await Promise.all([
+                    PostedContent.find({ urlHash: { $in: hashes }, availableAfter: { $gt: now } }).select('urlHash').lean().catch(() => []),
+                    PrefetchedLink.find({ urlHash: { $in: hashes } }).select('urlHash').lean().catch(() => [])
+                ]);
+                const blocked = new Set(((posted || []).map(r => r.urlHash)).concat(((prefetched || []).map(r => r.urlHash))));
+
+                const toInsert = [];
+                for (const h of hashes) {
+                    if (blocked.has(h)) continue;
+                    const item = hashToItem.get(h);
+                    if (!item) continue;
+                    toInsert.push({
+                        url: item.url,
+                        urlHash: h,
+                        source: 'redgifs',
+                        category: config.category,
+                        title: item.title,
+                        thumbnail: item.thumbnail,
+                        description: item.description
+                    });
+                }
+
+                if (toInsert.length) {
+                    try {
+                        // insertMany with ordered:false to continue on duplicates
+                        await PrefetchedLink.insertMany(toInsert, { ordered: false });
+                    } catch (e) { /* ignore duplicate key errors */ }
+                }
+
+                // Check if buffer is now satisfied
+                try {
+                    const newCount = await PrefetchedLink.countDocuments({ source: 'redgifs', category: config.category });
+                    if (newCount >= minBuffer) break;
+                } catch (e) { /* continue attempts */ }
+            }
+        } catch (e) { console.error('[AutoWebScrape] schedulePrefetchIfNeeded error:', e.message); }
+    }
+
+    async executeDbBackedAutoPost(config) {
+        if (this.activePosts.size >= this.maxConcurrentPosts) return;
+        const postId = `${config.channelId}_${config.source}_${config.category}_${Date.now()}`;
+        this.activePosts.add(postId);
+    try {
+            const channel = await this.client.channels.fetch(config.channelId);
+            if (!channel) throw new Error(`Channel ${config.channelId} not found`);
+            let content;
+            let claimedDoc = null;
+            if (config.source === 'redgifs') {
+                try {
+                    const workerId = `${process.pid}_${Date.now()}`;
+                    const popped = await PrefetchedLink.findOneAndUpdate(
+                        { source: 'redgifs', category: config.category, claimed: false },
+                        { $set: { claimed: true, claimedBy: workerId, claimedAt: new Date(), lastAttemptAt: new Date() }, $inc: { attempts: 1 } },
+                        { sort: { fetchedAt: 1 }, returnDocument: 'after' }
+                    ).lean().catch(() => null);
+                    if (popped) {
+                        // mark as currently claimed by this worker
+                        claimedDoc = popped;
+                        const can = await PostedContent.canPostContent(popped.url, 'redgifs', config.category, config.channelId).catch(() => ({ canPost: true }));
+                        if (can && can.canPost) {
+                            content = { title: popped.title, url: popped.url, thumbnail: popped.thumbnail, description: popped.description, footer: `Source: Redgifs • Category: ${config.category}`, color: '#ff6b6b', tags: [], source: 'redgifs', _prefetchedId: popped._id };
+                        } else {
+                            // popped item was duplicate - mark it removed (but avoid aggressive deletes)
+                            await PrefetchedLink.findByIdAndDelete(popped._id).catch(() => null);
+                            claimedDoc = null;
+                            let attempts = 0;
+                            const maxLoop = Math.max(4, this.prefetchMaxAttempts || 6);
+                            while (!content && attempts < maxLoop) {
+                                const workerId2 = `${process.pid}_${Date.now()}_${attempts}`;
+                                const next = await PrefetchedLink.findOneAndUpdate({ source: 'redgifs', category: config.category, claimed: false }, { $set: { claimed: true, claimedBy: workerId2, claimedAt: new Date(), lastAttemptAt: new Date() }, $inc: { attempts: 1 } }, { sort: { fetchedAt: 1 }, returnDocument: 'after' }).lean().catch(() => null);
+                                attempts++;
+                                if (!next) break;
+                                const can2 = await PostedContent.canPostContent(next.url, 'redgifs', config.category, config.channelId).catch(() => ({ canPost: true }));
+                                if (can2 && can2.canPost) { content = { title: next.title, url: next.url, thumbnail: next.thumbnail, description: next.description, footer: `Source: Redgifs • Category: ${config.category}`, color: '#ff6b6b', tags: [], source: 'redgifs', _prefetchedId: next._id }; claimedDoc = next; break; }
+                                else { await PrefetchedLink.findByIdAndDelete(next._id).catch(() => null); }
+                            }
+                        }
+                    }
+                } catch (e) { /* continue to live fetch fallback */ }
+
+                if (!content) {
+                    // fallback: live fetch loop until we find a DB-allowed item or attempts exhausted
+                    let attempts = 0;
+                    while (!content && attempts < 8) {
+                        const c = await this.redgifsRequester.getRandomContent(config.category).catch(() => null);
+                        attempts++;
+                        if (!c) continue;
+                        try {
+                            const can = await PostedContent.canPostContent(c.url, 'redgifs', config.category, config.channelId);
+                            if (can && can.canPost) { content = c; break; }
+                        } catch (e) { continue; }
+                    }
+                }
+            }
+            else if (config.source === 'x' || config.source === 'twitter') content = await this.xTwitterRequester.getRandomContent(config.category);
+            else if (config.source === 'ukdevilz') content = await this.ukdevilzRequester.getRandomContent(config.category);
+            else throw new Error(`Unknown source: ${config.source}`);
+            if (!content || !content.url) throw new Error('No content');
+            const message = await channel.send({ content: content.url });
+            await PostedContent.recordPostedContent({ url: content.url, source: config.source, category: config.category, title: content.title, thumbnail: content.thumbnail, description: content.description }, config.channelId, channel.guildId, message.id);
+            // If we used a prefetched DB item, remove it from the queue (clean up)
+            if (content && content._prefetchedId) {
+                // Remove the prefetched record now that it was successfully posted
+                await PrefetchedLink.findByIdAndDelete(content._prefetchedId).catch(() => null);
+            }
+            config.postCount = (config.postCount || 0) + 1; config.lastPost = new Date(); config.lastPostTime = Date.now();
+            const randomInterval = Math.floor(Math.random() * (this.maxInterval - this.minInterval)) + this.minInterval;
+            config.nextPostTime = new Date(Date.now() + randomInterval);
+            await config.save();
+            performanceMonitor.trackAutoPost(config.source, config.category, config.channelId, randomInterval, true, this.activePosts.size);
+        } catch (err) {
+            console.error('[AutoWebScrape] Failed to execute DB-backed auto-post:', err.message);
+            // If we claimed a doc but failed to post, increment failedAttempts and release or delete based on threshold
+            try {
+                if (claimedDoc && claimedDoc._id) {
+                    const upd = await PrefetchedLink.findByIdAndUpdate(claimedDoc._id, { $inc: { failedAttempts: 1 }, $set: { claimed: false, claimedBy: null, claimedAt: null, lastAttemptAt: new Date() } }, { new: true }).catch(() => null);
+                    if (upd && upd.failedAttempts >= 5) {
+                        await PrefetchedLink.findByIdAndDelete(claimedDoc._id).catch(() => null);
+                    }
+                }
+            } catch (e) { /* ignore release errors */ }
+            throw err;
+        } finally { this.activePosts.delete(postId); }
+    }
+
+    _startClaimReaper() {
+        try {
+            if (this._claimReaperInterval) return;
+            this._claimReaperInterval = setInterval(async () => {
+                try {
+                    const cutoff = new Date(Date.now() - (this.claimStaleMs || 3 * 60 * 1000));
+                    // Find stale claimed docs
+                    const stale = await PrefetchedLink.find({ claimed: true, claimedAt: { $lt: cutoff } }).select('_id failedAttempts').lean().catch(() => []);
+                    if (stale && stale.length) {
+                        for (const doc of stale) {
+                            try {
+                                const upd = await PrefetchedLink.findByIdAndUpdate(doc._id, { $inc: { failedAttempts: 1 }, $set: { claimed: false, claimedBy: null, claimedAt: null, lastAttemptAt: new Date() } }, { new: true }).catch(() => null);
+                                if (upd && upd.failedAttempts >= 5) {
+                                    await PrefetchedLink.findByIdAndDelete(doc._id).catch(() => null);
+                                    console.log(`[AutoWebScrape] Deleted prefetched link ${doc._id} after ${upd.failedAttempts} failed attempts`);
+                                }
+                            } catch (e) { /* ignore per-doc errors */ }
+                        }
+                        console.log(`[AutoWebScrape] Reaper processed ${stale.length} stale prefetched links`);
+                    }
+                } catch (e) { /* ignore reaper errors */ }
+            }, this.claimReaperIntervalMs || 60 * 1000);
+        } catch (e) { console.error('[AutoWebScrape] Failed to start claim reaper:', e.message); }
+    }
+
+    async startAutoPost(channelId, source, category, userId) {
+        const autoPostId = `${channelId}_${source}_${category}`;
+        if (this.activeAutoPosts.size >= this.maxActiveConfigs) throw new Error(`Maximum active auto-posts reached (${this.maxActiveConfigs}).`);
+        if (this.activeAutoPosts.has(autoPostId)) throw new Error(`Auto ${source} ${category} is already running in this channel`);
+        if (!this.supportedSources.includes(source.toLowerCase())) throw new Error(`Unsupported source: ${source}`);
+        const memUsage = process.memoryUsage(); const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024); if (heapUsedMB > 90) throw new Error(`System memory too high (${heapUsedMB}MB).`);
+        const config = { id: autoPostId, channelId, source: source.toLowerCase(), category: category.toLowerCase(), userId, isRunning: true, timeoutId: null, startTime: Date.now(), postCount: 0, lastPost: null, nextPostTime: null };
         this.activeAutoPosts.set(autoPostId, config);
-
-        // Start posting
         await this.scheduleNextPost(config);
-
-        console.log(`[AutoWebScrape] Started auto ${source} ${category} in channel ${channelId}`);
         return config;
     }
 
-    /**
-     * Schedule the next post with memory optimization
-     */
     async scheduleNextPost(config) {
-        if (!config.isRunning || config.suspended) {
-            return;
-        }
-
-        // MEMORY OPTIMIZATION: Clear any existing timeout to prevent memory leaks
-        if (config.timeoutId) {
-            clearTimeout(config.timeoutId);
-            config.timeoutId = null;
-        }
-
-        // Generate optimized random interval (20-45 minutes for reduced load)
+        if (!config.isRunning || config.suspended) return;
+        if (config.timeoutId) { clearTimeout(config.timeoutId); config.timeoutId = null; }
         const randomInterval = Math.floor(Math.random() * (this.maxInterval - this.minInterval)) + this.minInterval;
-        const nextPostTime = new Date(Date.now() + randomInterval);
-        config.nextPostTime = nextPostTime;
-
-        console.log(`[AutoWebScrape] Next ${config.source} ${config.category} post scheduled for: ${nextPostTime.toLocaleString()} (${Math.round(randomInterval / 60000)} minutes)`);
-
-        config.timeoutId = setTimeout(async () => {
-            // PERFORMANCE: Clear timeout reference immediately
-            config.timeoutId = null;
-            
-            try {
-                await this.executeAutoPost(config);
-                
-                // MEMORY OPTIMIZATION: Only schedule next if still active
-                if (config.isRunning && !config.suspended) {
-                    await this.scheduleNextPost(config);
-                }
-            } catch (error) {
-                console.error(`[AutoWebScrape] Error in auto-post for ${config.source} ${config.category}:`, error.message);
-                
-                // RESILIENCE: Continue scheduling with exponential backoff for errors
-                if (config.isRunning && !config.suspended) {
-                    const backoffDelay = Math.min(5 * 60 * 1000, 30000 * Math.pow(2, config.errorCount || 0));
-                    setTimeout(() => {
-                        if (config.isRunning && !config.suspended) {
-                            this.scheduleNextPost(config);
-                        }
-                    }, backoffDelay);
-                }
-            }
-        }, randomInterval);
+        config.nextPostTime = new Date(Date.now() + randomInterval);
+        config.timeoutId = setTimeout(async () => { config.timeoutId = null; try { await this.executeAutoPost(config); if (config.isRunning && !config.suspended) await this.scheduleNextPost(config); } catch (e) { console.error('[AutoWebScrape] Error in auto-post:', e.message); if (config.isRunning && !config.suspended) { const backoffDelay = Math.min(5 * 60 * 1000, 30000 * Math.pow(2, config.errorCount || 0)); setTimeout(() => { if (config.isRunning && !config.suspended) this.scheduleNextPost(config); }, backoffDelay); } } }, randomInterval);
     }
 
-    /**
-     * Execute an auto-post with comprehensive optimization
-     */
     async executeAutoPost(config) {
-        // PERFORMANCE: Check concurrent post limit
-        if (this.activePosts.size >= this.maxConcurrentPosts) {
-            console.log(`[AutoWebScrape] Max concurrent posts reached (${this.maxConcurrentPosts}), deferring ${config.source} ${config.category}`);
-            return;
-        }
-
+        if (this.activePosts.size >= this.maxConcurrentPosts) return;
         const postId = `${config.channelId}_${config.source}_${config.category}_${Date.now()}`;
         const startTime = Date.now();
         this.activePosts.add(postId);
-
-        try {
-            // MEMORY CHECK: Monitor memory before proceeding
-            const memUsage = process.memoryUsage();
-            const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-            
-            if (heapUsedMB > 95) {
-                console.warn(`[AutoWebScrape] High memory usage (${heapUsedMB}MB), skipping post to prevent issues`);
-                return;
-            }
-
-            const channel = await this.client.channels.fetch(config.channelId);
-            if (!channel) {
-                throw new Error(`Channel ${config.channelId} not found`);
-            }
-
-            // Check for API overlap prevention with increased gap
-            const now = Date.now();
-            const lastApiCall = this.lastApiCalls.get(config.source) || 0;
-            const timeSinceLastCall = now - lastApiCall;
-            
-            if (timeSinceLastCall < this.minApiGap) {
-                const waitTime = this.minApiGap - timeSinceLastCall;
-                console.log(`[AutoWebScrape] Preventing API overlap for ${config.source}, waiting ${Math.round(waitTime / 1000)}s`);
-                await new Promise(resolve => setTimeout(resolve, waitTime));
-            }
-
-            // Update last API call time
+    let claimedDoc = null;
+    try {
+            const memUsage = process.memoryUsage(); const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024); if (heapUsedMB > 95) { console.warn(`[AutoWebScrape] High memory usage (${heapUsedMB}MB), skipping post`); return; }
+            const channel = await this.client.channels.fetch(config.channelId); if (!channel) throw new Error(`Channel ${config.channelId} not found`);
+            const now = Date.now(); const lastApiCall = this.lastApiCalls.get(config.source) || 0; const timeSinceLastCall = now - lastApiCall; if (timeSinceLastCall < this.minApiGap) { await new Promise(r => setTimeout(r, this.minApiGap - timeSinceLastCall)); }
             this.lastApiCalls.set(config.source, Date.now());
-
-            // PERFORMANCE: Use timeout for API calls to prevent hanging
-            const contentPromise = (() => {
-                switch (config.source) {
-                    case 'redgifs':
-                        const redgifsEnabled = process.env.ENABLE_REDGIFS === 'true' || process.env.ENABLE_REDGIFS === '1' || !process.env.ENABLE_REDGIFS;
-                        if (!redgifsEnabled && process.env.ENABLE_REDGIFS === 'false') {
-                            throw new Error('Redgifs scraping is disabled');
-                        }
-                        return this.redgifsRequester.getRandomContent(config.category);
-                        
-                    case 'x':
-                    case 'twitter':
-                        if (!process.env.ENABLE_X_TWITTER || process.env.ENABLE_X_TWITTER !== 'true') {
-                            throw new Error('X/Twitter scraping is disabled');
-                        }
-                        return this.xTwitterRequester.getRandomContent(config.category);
-                        
-                    default:
-                        throw new Error(`Unknown source: ${config.source}`);
-                }
-            })();
-
-            // PERFORMANCE: Add timeout to prevent hanging requests
-            const content = await Promise.race([
-                contentPromise,
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('API request timeout')), 30000) // 30 second timeout
-                )
-            ]);
-
-            // Validate content before posting
-            if (!content || !content.url) {
-                console.error(`[AutoWebScrape] CRITICAL ERROR: No content or URL received from ${config.source} ${config.category}`);
-                throw new Error(`No valid content URL received from ${config.source}`);
+            let contentPromise;
+            switch (config.source) {
+                case 'redgifs': {
+                        // Try to obtain an item from DB-backed PrefetchedLink queue first
+                        contentPromise = (async () => {
+                            try {
+                                        const workerId = `${process.pid}_${Date.now()}`;
+                                        const popped = await PrefetchedLink.findOneAndUpdate({ source: 'redgifs', category: config.category, claimed: false }, { $set: { claimed: true, claimedBy: workerId, claimedAt: new Date(), lastAttemptAt: new Date() }, $inc: { attempts: 1 } }, { sort: { fetchedAt: 1 }, returnDocument: 'after' }).lean().catch(() => null);
+                                        if (popped && popped.url) {
+                                            claimedDoc = popped;
+                                            const can = await PostedContent.canPostContent(popped.url, 'redgifs', config.category, config.channelId).catch(() => ({ canPost: true }));
+                                            if (can && can.canPost) return { title: popped.title, url: popped.url, thumbnail: popped.thumbnail, description: popped.description, footer: `Source: Redgifs • Category: ${config.category}`, color: '#ff6b6b', tags: [], source: 'redgifs', _prefetchedId: popped._id };
+                                            // if not allowed, remove it
+                                            await PrefetchedLink.findByIdAndDelete(popped._id).catch(() => null);
+                                            claimedDoc = null;
+                                        }
+                            } catch (e) { /* ignore and fallback */ }
+                            // fallback: live API
+                            return await this.redgifsRequester.getRandomContent(config.category);
+                        })();
+                } break;
+                case 'x': case 'twitter': contentPromise = this.xTwitterRequester.getRandomContent(config.category); break;
+                case 'ukdevilz': contentPromise = this.ukdevilzRequester.getRandomContent(config.category); break;
+                default: throw new Error(`Unknown source: ${config.source}`);
             }
-
-            // Validate URL format
-            if (!content.url.startsWith('http')) {
-                console.error(`[AutoWebScrape] CRITICAL ERROR: Invalid URL format from ${config.source}: ${content.url}`);
-                throw new Error(`Invalid URL format: ${content.url}`);
-            }
-
-            // CONTENT DEDUPLICATION: Check if content was posted recently (72 hour window)
-            try {
-                const canPost = await this.checkContentDuplication(content.url, config.source, config.category, config.channelId);
-                
-                if (!canPost.canPost) {
-                    if (canPost.reason === 'duplicate_same_channel') {
-                        console.log(`[AutoWebScrape] Skipping duplicate content in ${config.channelId} - last posted: ${canPost.lastPosted}, available after: ${canPost.availableAfter}`);
-                        // Don't throw error, just skip this content and try again later
-                        return;
-                    }
-                    // For other reasons, we might still want to skip or handle differently
-                    console.log(`[AutoWebScrape] Content check result: ${canPost.reason} for ${content.url}`);
-                }
-            } catch (dupeError) {
-                console.warn(`[AutoWebScrape] Content duplication check failed: ${dupeError.message}, proceeding with post`);
-            }
-
-            console.log(`[AutoWebScrape] Posting ${config.source} content - URL: ${content.url}`);
-
-            // MEMORY OPTIMIZATION: Use direct posting without complex objects
+            const content = await Promise.race([contentPromise, new Promise((_, reject) => setTimeout(() => reject(new Error('API request timeout')), 30000))]);
+            if (!content || !content.url) throw new Error('No valid content');
+            const canPost = await this.checkContentDuplication(content.url, config.source, config.category, config.channelId).catch(() => ({ canPost: true }));
+            if (!canPost.canPost && canPost.reason === 'duplicate_same_channel') return;
             let message;
-            
             if (config.source === 'redgifs') {
-                // For redgifs, post URL directly (like testmedia does)
-                message = await channel.send({
-                    content: content.url
-                });
-                console.log(`[AutoWebScrape] Posted redgifs content, scheduling upgrade button for message ID: ${message.id}`);
-                
-                // MEMORY OPTIMIZATION: Use WeakRef for button timeout to prevent memory leaks
-                const messageRef = new WeakRef(message);
-                const buttonTimeout = setTimeout(async () => {
-                    try {
-                        const msg = messageRef.deref();
-                        if (!msg) {
-                            console.log(`[AutoWebScrape] Message reference cleaned up, skipping button`);
-                            return;
-                        }
-                        
-                        const upgradeButton = new ActionRowBuilder()
-                            .addComponents(
-                                new ButtonBuilder()
-                                    .setLabel('🚀 Upgrade to Premium')
-                                    .setStyle(ButtonStyle.Link)
-                                    .setURL('https://upgrade.chat/storeaurora')
-                            );
-                        
-                        await msg.edit({
-                            content: content.url,
-                            components: [upgradeButton]
-                        });
-                        console.log(`[AutoWebScrape] ✅ Added upgrade button to redgifs post`);
-                    } catch (editError) {
-                        console.log(`[AutoWebScrape] Error adding upgrade button: ${editError.message}`);
-                    }
-                }, 3000);
-                
-                // MEMORY CLEANUP: Clear timeout reference
-                setTimeout(() => {
-                    if (buttonTimeout) {
-                        clearTimeout(buttonTimeout);
-                    }
-                }, 10000); // Clear after 10 seconds
-                
+                message = await channel.send({ content: content.url });
+            } else if (config.source === 'ukdevilz') {
+                const embed = new EmbedBuilder().setTitle(content.title || 'Ukdevilz Video').setURL(content.page || content.url).setDescription(`Category: ${content.category}`).setColor(content.color || '#6b8cff').setFooter({ text: content.footer || 'Source: Ukdevilz' });
+                message = await channel.send({ content: content.url, embeds: [embed] });
             } else {
-                // For X/Twitter and other sources, post URL directly
-                message = await channel.send({
-                    content: content.url
-                });
+                message = await channel.send({ content: content.url });
             }
-
-            console.log(`[AutoWebScrape] ✅ Successfully posted ${config.source} ${config.category} content using direct URL method`);
-
-            // CONTENT TRACKING: Record posted content for deduplication
-            try {
-                const contentData = {
-                    url: content.url,
-                    source: config.source,
-                    category: config.category,
-                    title: content.title,
-                    thumbnail: content.thumbnail,
-                    description: content.description
-                };
-                
-                await this.recordPostedContent(contentData, config.channelId, channel.guildId, message.id);
-                console.log(`[AutoWebScrape] ✅ Content recorded for deduplication tracking`);
-            } catch (recordError) {
-                console.warn(`[AutoWebScrape] Failed to record content for deduplication: ${recordError.message}`);
-            }
-
-            // Update config with minimal memory footprint
-            config.postCount = (config.postCount || 0) + 1;
-            config.lastPost = new Date();
-            config.lastPostTime = Date.now();
-            
-            // MEMORY OPTIMIZATION: Reset error count on success
-            config.errorCount = 0;
-
-            console.log(`[AutoWebScrape] ✅ Successfully posted ${config.source} ${config.category} content to ${channel.name} (Post #${config.postCount})`);
-            
-            // PERFORMANCE TRACKING: Record successful auto-post
-            const duration = Date.now() - startTime;
-            performanceMonitor.trackAutoPost(config.source, config.category, config.channelId, duration, true, this.activePosts.size);
-
-        } catch (error) {
-            console.error(`[AutoWebScrape] Failed to execute auto-post:`, error.message);
-            
-            // PERFORMANCE TRACKING: Record failed auto-post
-            const duration = Date.now() - startTime;
-            performanceMonitor.trackAutoPost(config.source, config.category, config.channelId, duration, false, this.activePosts.size);
-            
-            // Increment error count
+            await this.recordPostedContent({ url: content.url, source: config.source, category: config.category, title: content.title, thumbnail: content.thumbnail, description: content.description }, config.channelId, channel.guildId, message.id);
+            config.postCount = (config.postCount || 0) + 1; config.lastPost = new Date(); config.lastPostTime = Date.now(); config.errorCount = 0;
+            performanceMonitor.trackAutoPost(config.source, config.category, config.channelId, Date.now() - startTime, true, this.activePosts.size);
+                // Clear temp prefetch shortly after posting
+                if (config.source === 'redgifs') {
+                    const configId = config.id || `${config.channelId}_${config.source}_${config.category}`;
+                    if (this.prefetchTimeouts.has(configId)) clearTimeout(this.prefetchTimeouts.get(configId));
+                    const clearTid = setTimeout(() => { this.tempPrefetch.delete(configId); this.prefetchTimeouts.delete(configId); }, this.postCacheClearMs);
+                    this.prefetchTimeouts.set(configId, clearTid);
+                }
+        } catch (err) {
+            console.error('[AutoWebScrape] Failed to execute auto-post:', err.message);
             config.errorCount = (config.errorCount || 0) + 1;
-            
-            // PERFORMANCE: More aggressive error handling to prevent resource waste
-            if (config.errorCount >= 3) { // Reduced from 5 to 3
-                console.log(`[AutoWebScrape] Too many errors (${config.errorCount}), suspending ${config.source} ${config.category} for 15 minutes`);
-                config.suspended = true;
-                
-                // MEMORY OPTIMIZATION: Use WeakRef for timeout
-                const configRef = new WeakRef(config);
-                setTimeout(() => {
-                    const cfg = configRef.deref();
-                    if (cfg) {
-                        cfg.suspended = false;
-                        cfg.errorCount = 0;
-                        console.log(`[AutoWebScrape] Resuming ${cfg.source} ${cfg.category} after error cooldown`);
-                    }
-                }, 15 * 60 * 1000); // 15 minutes (increased from 10)
-            }
-            
-            throw error;
-        } finally {
-            // MEMORY CLEANUP: Always remove from active posts
-            this.activePosts.delete(postId);
-        }
+            if (config.errorCount >= 3) { config.suspended = true; setTimeout(() => { config.suspended = false; config.errorCount = 0; }, 15 * 60 * 1000); }
+            performanceMonitor.trackAutoPost(config.source, config.category, config.channelId, Date.now() - startTime, false, this.activePosts.size);
+            // If we claimed a prefetched doc but failed to post, release it for retry
+            try { if (claimedDoc && claimedDoc._id) await PrefetchedLink.findByIdAndUpdate(claimedDoc._id, { $set: { claimed: false, claimedBy: null, claimedAt: null } }).catch(() => null); } catch (e) { /* ignore */ }
+            throw err;
+        } finally { this.activePosts.delete(postId); }
     }
 
-    /**
-     * Stop auto-posting
-     */
     async stopAutoPost(channelId, source, category) {
         const autoPostId = `${channelId}_${source}_${category}`;
         const config = this.activeAutoPosts.get(autoPostId);
-        
-        if (config) {
-            config.isRunning = false;
-            if (config.timeoutId) {
-                clearTimeout(config.timeoutId);
-            }
-            this.activeAutoPosts.delete(autoPostId);
-            console.log(`[AutoWebScrape] Stopped auto ${source} ${category} in channel ${channelId}`);
-            return true;
-        }
-        
+        if (config) { config.isRunning = false; if (config.timeoutId) clearTimeout(config.timeoutId); this.activeAutoPosts.delete(autoPostId); return true; }
         return false;
     }
 
-    /**
-     * Stop all auto-posts in a channel
-     */
     async stopAllAutoPostsInChannel(channelId) {
-        let stoppedCount = 0;
-        
-        for (const [autoPostId, config] of this.activeAutoPosts.entries()) {
-            if (config.channelId === channelId) {
-                config.isRunning = false;
-                if (config.timeoutId) {
-                    clearTimeout(config.timeoutId);
-                }
-                this.activeAutoPosts.delete(autoPostId);
-                stoppedCount++;
-            }
-        }
-        
-        console.log(`[AutoWebScrape] Stopped ${stoppedCount} auto-posts in channel ${channelId}`);
-        return stoppedCount;
+        let stoppedCount = 0; for (const [id, cfg] of this.activeAutoPosts.entries()) { if (cfg.channelId === channelId) { cfg.isRunning = false; if (cfg.timeoutId) clearTimeout(cfg.timeoutId); this.activeAutoPosts.delete(id); stoppedCount++; } } return stoppedCount;
     }
 
-    /**
-     * Convenience method to start Redgifs auto-posting
-     */
-    async startRedgifsPosting(channelId, category = 'amateur') {
-        return await this.startAutoPost(channelId, 'redgifs', category, null);
-    }
+    async startRedgifsPosting(channelId, category = 'amateur') { return await this.startAutoPost(channelId, 'redgifs', category, null); }
+    async startXPosting(channelId, category = 'amateur') { return await this.startAutoPost(channelId, 'x', category, null); }
 
-    /**
-     * Convenience method to start X (Twitter) auto-posting
-     */
-    async startXPosting(channelId, category = 'amateur') {
-        return await this.startAutoPost(channelId, 'x', category, null);
-    }
+    async stopRedgifsPosting(channelId, category = null) { if (category) return await this.stopAutoPost(channelId, 'redgifs', category); const configs = Array.from(this.activeAutoPosts.values()).filter(c => c.channelId === channelId && c.source === 'redgifs'); for (const c of configs) await this.stopAutoPost(channelId, 'redgifs', c.category); return configs.length; }
+    async stopXPosting(channelId, category = null) { if (category) return await this.stopAutoPost(channelId, 'x', category); const configs = Array.from(this.activeAutoPosts.values()).filter(c => c.channelId === channelId && c.source === 'x'); for (const c of configs) await this.stopAutoPost(channelId, 'x', c.category); return configs.length; }
 
-    /**
-     * Convenience method to stop Redgifs auto-posting
-     */
-    async stopRedgifsPosting(channelId, category = null) {
-        if (category) {
-            return await this.stopAutoPost(channelId, 'redgifs', category);
-        } else {
-            // Stop all Redgifs posts in the channel
-            const configs = Array.from(this.activeAutoPosts.values())
-                .filter(config => config.channelId === channelId && config.source === 'redgifs');
-            
-            for (const config of configs) {
-                await this.stopAutoPost(channelId, 'redgifs', config.category);
-            }
-            return configs.length;
-        }
-    }
+    getRedgifsStatus() { const configs = Array.from(this.activeAutoPosts.values()).filter(c => c.source === 'redgifs'); if (configs.length === 0) return { isActive: false, channelId: null, category: null, nextPost: 'Not scheduled', postsSent: 0, uptime: 'Not started', interval: '3-10 minutes (random)', lastPost: 'Never', errors: 0, suspended: false, memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`, systemStatus: 'Inactive' }; const config = configs[0]; const uptime = config.startTime ? this.formatUptime(Date.now() - config.startTime) : 'Not started'; let nextPost = 'Not scheduled'; if (config.nextPostTime) { const timeUntil = config.nextPostTime.getTime() - Date.now(); if (timeUntil > 0) { const minutesUntil = Math.floor(timeUntil / (1000 * 60)); const secondsUntil = Math.floor((timeUntil % (1000 * 60)) / 1000); nextPost = `${minutesUntil}m ${secondsUntil}s (${config.nextPostTime.toLocaleTimeString()})`; } else nextPost = 'Overdue - processing...'; } const lastPost = config.lastPostTime ? `${this.formatUptime(Date.now() - config.lastPostTime)} ago` : 'Never'; return { isActive: config.isRunning && !config.suspended, channelId: config.channelId, category: config.category, nextPost, postsSent: config.postCount || 0, uptime, interval: '3-10 minutes (random)', lastPost, errors: config.errorCount || 0, suspended: config.suspended || false, memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`, systemStatus: config.isRunning ? (config.suspended ? 'Suspended' : 'Running') : 'Stopped' } }
 
-    /**
-     * Convenience method to stop X (Twitter) auto-posting
-     */
-    async stopXPosting(channelId, category = null) {
-        if (category) {
-            return await this.stopAutoPost(channelId, 'x', category);
-        } else {
-            // Stop all X posts in the channel
-            const configs = Array.from(this.activeAutoPosts.values())
-                .filter(config => config.channelId === channelId && config.source === 'x');
-            
-            for (const config of configs) {
-                await this.stopAutoPost(channelId, 'x', config.category);
-            }
-            return configs.length;
-        }
-    }
+    async startUkdevilzPosting(channelId, category = 'amateur') { return await this.ukdevilzAuto.startUkdevilzPosting(channelId, category, this); }
+    async stopUkdevilzPosting(channelId, category = null) { return await this.ukdevilzAuto.stopUkdevilzPosting(channelId, category); }
+    getUkdevilzStatus() { return this.ukdevilzAuto.getUkdevilzStatus(); }
 
-    /**
-     * Get status of Redgifs auto-posting
-     */
-    getRedgifsStatus() {
-        const configs = Array.from(this.activeAutoPosts.values())
-            .filter(config => config.source === 'redgifs');
-        
-        if (configs.length === 0) {
-            return {
-                isActive: false,
-                channelId: null,
-                category: null,
-                nextPost: "Not scheduled",
-                postsSent: 0,
-                uptime: "Not started",
-                interval: "3-10 minutes (random)",
-                lastPost: "Never",
-                errors: 0,
-                suspended: false,
-                memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
-                systemStatus: "Inactive"
-            };
-        }
+    getXStatus() { const configs = Array.from(this.activeAutoPosts.values()).filter(c => c.source === 'x'); if (configs.length === 0) return { isActive: false, channelId: null, category: null, nextPost: 'Not scheduled', postsSent: 0, uptime: 'Not started', interval: '3-10 minutes (random)', lastPost: 'Never', errors: 0, suspended: false, memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`, systemStatus: 'Inactive' }; const config = configs[0]; const uptime = config.startTime ? this.formatUptime(Date.now() - config.startTime) : 'Not started'; let nextPost = 'Not scheduled'; if (config.nextPostTime) { const timeUntil = config.nextPostTime.getTime() - Date.now(); if (timeUntil > 0) { const minutesUntil = Math.floor(timeUntil / (1000 * 60)); const secondsUntil = Math.floor((timeUntil % (1000 * 60)) / 1000); nextPost = `${minutesUntil}m ${secondsUntil}s (${config.nextPostTime.toLocaleTimeString()})`; } else nextPost = 'Overdue - processing...'; } const lastPost = config.lastPostTime ? `${this.formatUptime(Date.now() - config.lastPostTime)} ago` : 'Never'; return { isActive: config.isRunning && !config.suspended, channelId: config.channelId, category: config.category, nextPost, postsSent: config.postCount || 0, uptime, interval: '3-10 minutes (random)', lastPost, errors: config.errorCount || 0, suspended: config.suspended || false, memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`, systemStatus: config.isRunning ? (config.suspended ? 'Suspended' : 'Running') : 'Stopped' } }
 
-        const config = configs[0]; // Get first active config
-        const uptime = config.startTime ? 
-            this.formatUptime(Date.now() - config.startTime) : "Not started";
-        
-        let nextPost = "Not scheduled";
-        if (config.nextPostTime) {
-            const timeUntil = config.nextPostTime.getTime() - Date.now();
-            if (timeUntil > 0) {
-                const minutesUntil = Math.floor(timeUntil / (1000 * 60));
-                const secondsUntil = Math.floor((timeUntil % (1000 * 60)) / 1000);
-                nextPost = `${minutesUntil}m ${secondsUntil}s (${config.nextPostTime.toLocaleTimeString()})`;
-            } else {
-                nextPost = "Overdue - processing...";
-            }
-        }
+    formatUptime(milliseconds) { const seconds = Math.floor(milliseconds / 1000); const minutes = Math.floor(seconds / 60); const hours = Math.floor(minutes / 60); if (hours > 0) return `${hours}h ${minutes % 60}m`; else if (minutes > 0) return `${minutes}m ${seconds % 60}s`; else return `${seconds}s`; }
 
-        const lastPost = config.lastPostTime ? 
-            `${this.formatUptime(Date.now() - config.lastPostTime)} ago` : "Never";
+    async emergencyStop() { let stoppedCount = 0; for (const [id, cfg] of this.activeAutoPosts.entries()) { cfg.isRunning = false; cfg.suspended = true; if (cfg.timeoutId) { clearTimeout(cfg.timeoutId); cfg.timeoutId = null; } stoppedCount++; } this.activeAutoPosts.clear(); this.activePosts.clear(); this.lastApiCalls.clear(); this.contentCache.clear(); this.emergencyMode = true; this.emergencyStoppedAt = new Date(); if (global.gc) global.gc(); console.log(`[AutoWebScrape] EMERGENCY STOP COMPLETE - Stopped ${stoppedCount} auto-posts`); return stoppedCount; }
 
-        return {
-            isActive: config.isRunning && !config.suspended,
-            channelId: config.channelId,
-            category: config.category,
-            nextPost: nextPost,
-            postsSent: config.postCount || 0,
-            uptime: uptime,
-            interval: "3-10 minutes (random)",
-            lastPost: lastPost,
-            errors: config.errorCount || 0,
-            suspended: config.suspended || false,
-            memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
-            systemStatus: config.isRunning ? (config.suspended ? "Suspended" : "Running") : "Stopped"
-        };
-    }
+    isEmergencyMode() { return this.emergencyMode || false; }
 
-    /**
-     * Get status of X (Twitter) auto-posting
-     */
-    getXStatus() {
-        const configs = Array.from(this.activeAutoPosts.values())
-            .filter(config => config.source === 'x');
-        
-        if (configs.length === 0) {
-            return {
-                isActive: false,
-                channelId: null,
-                category: null,
-                nextPost: "Not scheduled",
-                postsSent: 0,
-                uptime: "Not started",
-                interval: "3-10 minutes (random)",
-                lastPost: "Never",
-                errors: 0,
-                suspended: false,
-                memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
-                systemStatus: "Inactive"
-            };
-        }
+    cleanup() { performanceMonitor.stopMonitoring(); if (this.cleanupInterval) { clearInterval(this.cleanupInterval); this.cleanupInterval = null; } for (const [, cfg] of this.activeAutoPosts.entries()) { cfg.isRunning = false; if (cfg.timeoutId) clearTimeout(cfg.timeoutId); } this.activeAutoPosts.clear(); this.activePosts.clear(); this.lastApiCalls.clear(); this.contentCache.clear(); if (global.gc) global.gc(); console.log('[AutoWebScrape] Enhanced cleanup completed - all resources released'); }
 
-        const config = configs[0]; // Get first active config
-        const uptime = config.startTime ? 
-            this.formatUptime(Date.now() - config.startTime) : "Not started";
-        
-        let nextPost = "Not scheduled";
-        if (config.nextPostTime) {
-            const timeUntil = config.nextPostTime.getTime() - Date.now();
-            if (timeUntil > 0) {
-                const minutesUntil = Math.floor(timeUntil / (1000 * 60));
-                const secondsUntil = Math.floor((timeUntil % (1000 * 60)) / 1000);
-                nextPost = `${minutesUntil}m ${secondsUntil}s (${config.nextPostTime.toLocaleTimeString()})`;
-            } else {
-                nextPost = "Overdue - processing...";
-            }
-        }
+    getSystemStats() { const m = process.memoryUsage(); return { heapUsed: Math.round(m.heapUsed / 1024 / 1024), heapTotal: Math.round(m.heapTotal / 1024 / 1024), rss: Math.round(m.rss / 1024 / 1024), external: Math.round(m.external / 1024 / 1024), activeConfigs: this.activeAutoPosts.size, activePosts: this.activePosts.size, maxConfigs: this.maxActiveConfigs, maxConcurrent: this.maxConcurrentPosts }; }
 
-        const lastPost = config.lastPostTime ? 
-            `${this.formatUptime(Date.now() - config.lastPostTime)} ago` : "Never";
+    clearEmergencyMode() { this.emergencyMode = false; this.emergencyStoppedAt = null; console.log('[AutoWebScrape] Emergency mode cleared'); }
 
-        return {
-            isActive: config.isRunning && !config.suspended,
-            channelId: config.channelId,
-            category: config.category,
-            nextPost: nextPost,
-            postsSent: config.postCount || 0,
-            uptime: uptime,
-            interval: "3-10 minutes (random)",
-            lastPost: lastPost,
-            errors: config.errorCount || 0,
-            suspended: config.suspended || false,
-            memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
-            systemStatus: config.isRunning ? (config.suspended ? "Suspended" : "Running") : "Stopped"
-        };
-    }
+    getOverallStatus() { const redgifsStatus = this.getRedgifsStatus(); const xStatus = this.getXStatus(); const totalActive = (redgifsStatus.isActive ? 1 : 0) + (xStatus.isActive ? 1 : 0); const totalSuspended = (redgifsStatus.suspended ? 1 : 0) + (xStatus.suspended ? 1 : 0); const totalPosts = redgifsStatus.postsSent + xStatus.postsSent; const totalErrors = redgifsStatus.errors + xStatus.errors; return { totalAutoPostsActive: totalActive, totalSuspended: totalSuspended, totalPostsSent: totalPosts, totalErrors: totalErrors, emergencyMode: this.isEmergencyMode(), emergencyStoppedAt: this.emergencyStoppedAt || null, memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`, systemStatus: this.emergencyMode ? 'Emergency Mode' : totalActive > 0 ? 'Active' : 'Inactive' }; }
 
-    /**
-     * Format uptime in human readable format
-     */
-    formatUptime(milliseconds) {
-        const seconds = Math.floor(milliseconds / 1000);
-        const minutes = Math.floor(seconds / 60);
-        const hours = Math.floor(minutes / 60);
-        
-        if (hours > 0) {
-            return `${hours}h ${minutes % 60}m`;
-        } else if (minutes > 0) {
-            return `${minutes}m ${seconds % 60}s`;
-        } else {
-            return `${seconds}s`;
-        }
-    }
-
-    /**
-     * EMERGENCY STOP - Stop all auto-posting immediately
-     */
-    async emergencyStop() {
-        console.log('[AutoWebScrape] EMERGENCY STOP INITIATED');
-        
-        let stoppedCount = 0;
-        
-        // Stop all active auto-posts
-        for (const [autoPostId, config] of this.activeAutoPosts.entries()) {
-            config.isRunning = false;
-            config.suspended = true;
-            
-            if (config.timeoutId) {
-                clearTimeout(config.timeoutId);
-                config.timeoutId = null;
-            }
-            
-            stoppedCount++;
-        }
-        
-        // Clear the map
-        this.activeAutoPosts.clear();
-        this.activePosts.clear();
-        
-        // Set emergency flag
-        this.emergencyMode = true;
-        this.emergencyStoppedAt = new Date();
-        
-        console.log(`[AutoWebScrape] EMERGENCY STOP COMPLETE - Stopped ${stoppedCount} auto-posts`);
-        return stoppedCount;
-    }
-
-    /**
-     * Check if system is in emergency mode
-     */
-    isEmergencyMode() {
-        return this.emergencyMode || false;
-    }
-
-    /**
-     * MEMORY OPTIMIZATION: Cleanup method to prevent memory leaks
-     */
-    cleanup() {
-        // Stop performance monitoring
-        performanceMonitor.stopMonitoring();
-        
-        // Clear cleanup interval
-        if (this.cleanupInterval) {
-            clearInterval(this.cleanupInterval);
-            this.cleanupInterval = null;
-        }
-        
-        // Stop all auto-posts
-        for (const [autoPostId, config] of this.activeAutoPosts.entries()) {
-            config.isRunning = false;
-            if (config.timeoutId) {
-                clearTimeout(config.timeoutId);
-            }
-        }
-        
-        // Clear all maps
-        this.activeAutoPosts.clear();
-        this.activePosts.clear();
-        this.lastApiCalls.clear();
-        this.contentCache.clear();
-        
-        // Force garbage collection if available
-        if (global.gc) {
-            global.gc();
-        }
-        
-        console.log('[AutoWebScrape] Enhanced cleanup completed - all resources released');
-    }
-
-    /**
-     * Get system memory and performance stats
-     */
-    getSystemStats() {
-        const memUsage = process.memoryUsage();
-        return {
-            heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
-            heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
-            rss: Math.round(memUsage.rss / 1024 / 1024),
-            external: Math.round(memUsage.external / 1024 / 1024),
-            activeConfigs: this.activeAutoPosts.size,
-            activePosts: this.activePosts.size,
-            maxConfigs: this.maxActiveConfigs,
-            maxConcurrent: this.maxConcurrentPosts
-        };
-    }
-
-    /**
-     * Clear emergency mode and allow restart
-     */
-    clearEmergencyMode() {
-        this.emergencyMode = false;
-        this.emergencyStoppedAt = null;
-        console.log('[AutoWebScrape] Emergency mode cleared');
-    }
-
-    /**
-     * Get overall system status
-     */
-    getOverallStatus() {
-        const redgifsStatus = this.getRedgifsStatus();
-        const xStatus = this.getXStatus();
-        
-        const totalActive = (redgifsStatus.isActive ? 1 : 0) + (xStatus.isActive ? 1 : 0);
-        const totalSuspended = (redgifsStatus.suspended ? 1 : 0) + (xStatus.suspended ? 1 : 0);
-        const totalPosts = redgifsStatus.postsSent + xStatus.postsSent;
-        const totalErrors = redgifsStatus.errors + xStatus.errors;
-        
-        return {
-            totalAutoPostsActive: totalActive,
-            totalSuspended: totalSuspended,
-            totalPostsSent: totalPosts,
-            totalErrors: totalErrors,
-            emergencyMode: this.isEmergencyMode(),
-            emergencyStoppedAt: this.emergencyStoppedAt || null,
-            memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
-            systemStatus: this.emergencyMode ? 'Emergency Mode' : 
-                         totalActive > 0 ? 'Active' : 'Inactive'
-        };
-    }
-
-    /**
-     * CONTENT DEDUPLICATION: Check if content can be posted (72-hour window)
-     */
     async checkContentDuplication(url, source, category, channelId) {
-        const crypto = require('crypto');
-        const urlHash = crypto.createHash('sha256').update(url).digest('hex');
-        
-        // First check in-memory cache for faster lookup
-        const cacheKey = `${urlHash}_${channelId}`;
-        if (this.contentCache.has(cacheKey)) {
-            const cached = this.contentCache.get(cacheKey);
-            if (Date.now() - cached.timestamp < (72 * 60 * 60 * 1000)) {
-                console.log(`[AutoWebScrape] Cache hit: Content duplicate detected for ${channelId}`);
-                return {
-                    canPost: false,
-                    reason: 'duplicate_same_channel_cached',
-                    lastPosted: new Date(cached.timestamp),
-                    availableAfter: new Date(cached.timestamp + (72 * 60 * 60 * 1000))
-                };
-            } else {
-                // Cache entry expired, remove it
+        try {
+            const crypto = require('crypto');
+            const urlHash = crypto.createHash('sha256').update(url).digest('hex');
+            const cacheKey = `${urlHash}_${channelId}`;
+            if (this.contentCache.has(cacheKey)) {
+                const cached = this.contentCache.get(cacheKey);
+                if (Date.now() - cached.timestamp < 72 * 60 * 60 * 1000) return { canPost: false, reason: 'duplicate_same_channel_cached', lastPosted: new Date(cached.timestamp), availableAfter: new Date(cached.timestamp + 72 * 60 * 60 * 1000) };
                 this.contentCache.delete(cacheKey);
             }
-        }
-        
-        // Check database for comprehensive deduplication
-        try {
             const result = await PostedContent.canPostContent(url, source, category, channelId);
-            
-            // Update cache with result if it's a recent duplicate
-            if (!result.canPost && result.reason === 'duplicate_same_channel') {
-                this.contentCache.set(cacheKey, {
-                    timestamp: result.lastPosted.getTime(),
-                    url: url
-                });
-            }
-            
+            if (!result.canPost && result.reason === 'duplicate_same_channel') this.contentCache.set(cacheKey, { timestamp: result.lastPosted.getTime(), url });
             return result;
-        } catch (error) {
-            console.error(`[AutoWebScrape] Content deduplication check failed: ${error.message}`);
-            // On error, allow posting to avoid blocking
-            return {
-                canPost: true,
-                reason: 'error_fallback'
-            };
-        }
+        } catch (err) { console.error(`[AutoWebScrape] Content deduplication check failed: ${err.message}`); return { canPost: true, reason: 'error_fallback' }; }
     }
 
-    /**
-     * CONTENT TRACKING: Record posted content for deduplication
-     */
     async recordPostedContent(contentData, channelId, guildId, messageId) {
         try {
-            const result = await PostedContent.recordPostedContent(contentData, channelId, guildId, messageId);
-            
-            // Update in-memory cache
-            const crypto = require('crypto');
-            const urlHash = crypto.createHash('sha256').update(contentData.url).digest('hex');
-            const cacheKey = `${urlHash}_${channelId}`;
-            
-            this.contentCache.set(cacheKey, {
-                timestamp: Date.now(),
-                url: contentData.url
-            });
-            
-            return result;
-        } catch (error) {
-            console.error(`[AutoWebScrape] Failed to record posted content: ${error.message}`);
-            return null;
-        }
+            const res = await PostedContent.recordPostedContent(contentData, channelId, guildId, messageId);
+            const crypto = require('crypto'); const urlHash = crypto.createHash('sha256').update(contentData.url).digest('hex'); const cacheKey = `${urlHash}_${channelId}`; this.contentCache.set(cacheKey, { timestamp: Date.now(), url: contentData.url }); return res;
+        } catch (err) { console.error(`[AutoWebScrape] Failed to record posted content: ${err.message}`); return null; }
     }
 
-    /**
-     * MAINTENANCE: Get content deduplication statistics
-     */
-    async getContentStats() {
-        try {
-            const dbStats = await PostedContent.getStats();
-            return {
-                database: dbStats,
-                cache: {
-                    size: this.contentCache.size,
-                    maxSize: this.maxCacheSize
-                }
-            };
-        } catch (error) {
-            console.error(`[AutoWebScrape] Failed to get content stats: ${error.message}`);
-            return null;
-        }
-    }
+    async getContentStats() { try { const dbStats = await PostedContent.getStats(); return { database: dbStats, cache: { size: this.contentCache.size, maxSize: this.maxCacheSize } }; } catch (err) { console.error(`[AutoWebScrape] Failed to get content stats: ${err.message}`); return null; } }
 
-    /**
-     * MAINTENANCE: Cleanup old content records
-     */
-    async cleanupOldContent() {
-        try {
-            const deletedCount = await PostedContent.cleanupOldRecords();
-            console.log(`[AutoWebScrape] Cleaned up ${deletedCount} old content records`);
-            return deletedCount;
-        } catch (error) {
-            console.error(`[AutoWebScrape] Failed to cleanup old content: ${error.message}`);
-            return 0;
-        }
-    }
+    async cleanupOldContent() { try { const deletedCount = await PostedContent.cleanupOldRecords(); console.log(`[AutoWebScrape] Cleaned up ${deletedCount} old content records`); return deletedCount; } catch (err) { console.error(`[AutoWebScrape] Failed to cleanup old content: ${err.message}`); return 0; } }
 }
 
 module.exports = AutoWebScrapeSender;

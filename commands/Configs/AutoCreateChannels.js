@@ -34,7 +34,7 @@ module.exports = {
                 .setTitle("❌ Access Denied")
                 .setDescription("You need `Manage Channels` permission to use this command.")
                 .setTimestamp();
-            return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+            return interaction.reply({ embeds: [errorEmbed], flags: 64 });
         }
 
         const action = interaction.options.getString('action');
@@ -81,7 +81,7 @@ module.exports = {
                 })
                 .setTimestamp();
             
-            return interaction.reply({ embeds: [previewEmbed], ephemeral: true });
+            return interaction.reply({ embeds: [previewEmbed], flags: 64 });
         }
 
         if (action === 'delete') {

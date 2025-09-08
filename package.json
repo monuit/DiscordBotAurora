@@ -4,6 +4,8 @@
   "description": "discord nsfw bot",
   "main": "index.js",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.883.0",
+    "@aws-sdk/lib-storage": "^3.883.0",
     "@discordjs/opus": "^0.9.0",
     "@discordjs/voice": "^0.16.1",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
@@ -32,6 +34,7 @@
     "plsargs": "^0.1.6",
     "pornhub.js": "^1.7.4",
     "process": "^0.11.10",
+    "puppeteer": "^24.19.0",
     "recursive-readdir": "^2.2.2",
     "request": "^2.88.2",
     "rm": "^0.1.8",

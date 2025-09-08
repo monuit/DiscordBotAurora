@@ -85,7 +85,7 @@ module.exports = {
     homemade_pinporn: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('homemade_pinporn', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
 
             const interactionAge = Date.now() - interaction.createdTimestamp;
             if (interactionAge > 2500) { console.log(`[HOMEMADE PINPORN] Interaction too old (${interactionAge}ms), skipping`); return; }
@@ -111,7 +111,7 @@ module.exports = {
     homemade_hotscop: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('homemade_hotscop', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
             const interactionAge = Date.now() - interaction.createdTimestamp;
             if (interactionAge > 2500) { console.log(`[HOMEMADE HOTSCOP] Interaction too old (${interactionAge}ms), skipping`); return; }
             if (!interaction.isRepliable()) { console.log('[HOMEMADE HOTSCOP] Interaction no longer repliable'); return; }
@@ -124,7 +124,7 @@ module.exports = {
     lesbian_pinporn: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('lesbian_pinporn', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
             const interactionAge = Date.now() - interaction.createdTimestamp;
             if (interactionAge > 2500) { console.log(`[LESBIAN PINPORN] Interaction too old (${interactionAge}ms), skipping`); return; }
             if (!interaction.isRepliable()) { console.log('[LESBIAN PINPORN] Interaction no longer repliable'); return; }
@@ -147,7 +147,7 @@ module.exports = {
     lesbian_hotscop: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('lesbian_hotscop', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
             const interactionAge = Date.now() - interaction.createdTimestamp; if (interactionAge > 2800) { console.log(`[LESBIAN HOTSCOP] Interaction too old (${interactionAge}ms), skipping`); return; }
             if (!interaction.isRepliable()) { console.log('[LESBIAN HOTSCOP] Interaction no longer repliable'); return; }
             await interaction.deferReply();
@@ -181,7 +181,7 @@ module.exports = {
             const rateCheck = checkFunctionRateLimit('milf_pinporn', interaction.user.id);
             if (!rateCheck.allowed) {
                 if (interaction.isRepliable()) {
-                    await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true });
+                    await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 });
                 }
                 return;
             }
@@ -264,7 +264,7 @@ module.exports = {
     milf_hotscop: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('milf_hotscop', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
             const interactionAge = Date.now() - interaction.createdTimestamp; if (interactionAge > 2500) { console.log(`[MILF HOTSCOP] Interaction too old (${interactionAge}ms), skipping`); return; }
             if (!interaction.isRepliable()) { console.log('[MILF HOTSCOP] Interaction no longer repliable'); return; }
             await interaction.deferReply(); if (!interaction.channel.nsfw) { await interaction.editReply({ embeds: [defaultNSFW(interaction)] }).catch(() => {}); return; }
@@ -296,7 +296,7 @@ module.exports = {
     onlyfans_pinporn: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('onlyfans_pinporn', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
             const interactionAge = Date.now() - interaction.createdTimestamp; if (interactionAge > 2500) { console.log(`[ONLYFANS PINPORN] Interaction too old (${interactionAge}ms), skipping`); return; }
             if (!interaction.isRepliable()) { console.log('[ONLYFANS PINPORN] Interaction no longer repliable'); return; }
             await interaction.deferReply(); if (!interaction.channel.nsfw) { await interaction.editReply({ embeds: [defaultNSFW(interaction)] }).catch(() => {}); return; }
@@ -315,7 +315,7 @@ module.exports = {
     onlyfans_hotscop: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('onlyfans_hotscop', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
             const interactionAge = Date.now() - interaction.createdTimestamp; if (interactionAge > 2800) { console.log(`[ONLYFANS HOTSCOP] Interaction too old (${interactionAge}ms), skipping`); return; }
             if (!interaction.isRepliable()) { console.log('[ONLYFANS HOTSCOP] Interaction no longer repliable'); return; }
             await interaction.deferReply();
@@ -352,7 +352,7 @@ module.exports = {
     porn_hotscop: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('porn_hotscop', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
 
             const interactionAge = Date.now() - interaction.createdTimestamp;
             if (interactionAge > 2500) { console.log(`[PORN HOTSCOP] Interaction too old (${interactionAge}ms), skipping`); return; }
@@ -395,7 +395,7 @@ module.exports = {
     tiktok_hotscop: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('tiktok_hotscop', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
             const interactionAge = Date.now() - interaction.createdTimestamp; if (interactionAge > 2500) { console.log(`[TIKTOK HOTSCOP] Interaction too old (${interactionAge}ms), skipping`); return; }
             if (!interaction.isRepliable()) { console.log('[TIKTOK HOTSCOP] Interaction no longer repliable'); return; }
             await interaction.deferReply(); if (!interaction.channel.nsfw) { await interaction.editReply({ embeds: [defaultNSFW(interaction)] }).catch(() => {}); return; }
@@ -425,7 +425,7 @@ module.exports = {
     tiktok_pinporn: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('tiktok_pinporn', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
             const interactionAge = Date.now() - interaction.createdTimestamp; if (interactionAge > 2500) { console.log(`[TIKTOK PINPORN] Interaction too old (${interactionAge}ms), skipping`); return; }
             if (!interaction.isRepliable()) { console.log('[TIKTOK PINPORN] Interaction no longer repliable'); return; }
             await interaction.deferReply(); if (!interaction.channel.nsfw) { await interaction.editReply({ embeds: [defaultNSFW(interaction)] }).catch(() => {}); return; }
@@ -444,7 +444,7 @@ module.exports = {
     tiktok_tikporn: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('tiktok_tikporn', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
             const interactionAge = Date.now() - interaction.createdTimestamp; if (interactionAge > 2500) { console.log(`[TIKTOK TIKPORN] Interaction too old (${interactionAge}ms), skipping`); return; }
             if (!interaction.isRepliable()) { console.log('[TIKTOK TIKPORN] Interaction no longer repliable'); return; }
             await interaction.deferReply();
@@ -474,7 +474,7 @@ module.exports = {
     tiktok_onlytik: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('tiktok_onlytik', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
             const interactionAge = Date.now() - interaction.createdTimestamp; if (interactionAge > 2500) { console.log(`[TIKTOK ONLYTIK] Interaction too old (${interactionAge}ms), skipping`); return; }
             if (!interaction.isRepliable()) { console.log('[TIKTOK ONLYTIK] Interaction no longer repliable'); return; }
             await interaction.deferReply();
@@ -505,7 +505,7 @@ module.exports = {
     tiktok_tube: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('tiktok_tube', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
             const interactionAge = Date.now() - interaction.createdTimestamp; if (interactionAge > 2500) { console.log(`[TIKTOK TUBE] Interaction too old (${interactionAge}ms), skipping`); return; }
             if (!interaction.isRepliable()) { console.log('[TIKTOK TUBE] Interaction no longer repliable'); return; }
             await interaction.deferReply();
@@ -571,7 +571,7 @@ module.exports = {
     neko_4k: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('neko_4k', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
             const interactionAge = Date.now() - interaction.createdTimestamp; if (interactionAge > 2500) { console.log(`[NEKO 4K] Interaction too old (${interactionAge}ms), skipping`); return; }
             if (!interaction.isRepliable()) { console.log('[NEKO 4K] Interaction no longer repliable'); return; }
             await interaction.deferReply();
@@ -595,7 +595,7 @@ module.exports = {
     neko_anal: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('neko_anal', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
             const interactionAge = Date.now() - interaction.createdTimestamp; if (interactionAge > 2500) { console.log(`[NEKO ANAL] Interaction too old (${interactionAge}ms), skipping`); return; }
             if (!interaction.isRepliable()) { console.log('[NEKO ANAL] Interaction no longer repliable'); return; }
             await interaction.deferReply();
@@ -625,7 +625,7 @@ module.exports = {
     neko_paizuri: async function (interaction, client) {
         try {
             const rateCheck = checkFunctionRateLimit('neko_paizuri', interaction.user.id);
-            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true }); return; }
+            if (!rateCheck.allowed) { if (interaction.isRepliable()) await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 }); return; }
             const interactionAge = Date.now() - interaction.createdTimestamp; if (interactionAge > 2500) { console.log(`[NEKO PAIZURI] Interaction too old (${interactionAge}ms), skipping`); return; }
             if (!interaction.isRepliable()) { console.log('[NEKO PAIZURI] Interaction no longer repliable'); return; }
             await interaction.deferReply();
@@ -703,7 +703,7 @@ module.exports = {
                 if (interaction.isRepliable()) {
                     await interaction.reply({
                         content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`,
-                        ephemeral: true
+                        flags: 64
                     });
                 }
                 return;
@@ -927,7 +927,7 @@ module.exports = {
             const rateCheck = checkFunctionRateLimit('asian_hotscop', interaction.user.id);
             if (!rateCheck.allowed) {
                 if (interaction.isRepliable()) {
-                    await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true });
+                    await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 });
                 }
                 return;
             }
@@ -1086,7 +1086,7 @@ module.exports = {
                 if (interaction.isRepliable()) {
                     await interaction.reply({
                         content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`,
-                        ephemeral: true
+                        flags: 64
                     });
                 }
                 return;
@@ -1221,7 +1221,7 @@ module.exports = {
                 if (interaction.isRepliable()) {
                     await interaction.reply({
                         content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`,
-                        ephemeral: true
+                        flags: 64
                     });
                 }
                 return;
@@ -1690,7 +1690,7 @@ module.exports = {
                         embeds: [apioff],
                         files: [],
                         content: "",
-                        ephemeral: true
+                        flags: 64
                     })
                 }
 
@@ -2155,7 +2155,7 @@ module.exports = {
             const rateCheck = checkFunctionRateLimit('lesbian_fiqfuq', interaction.user.id);
             if (!rateCheck.allowed) {
                 if (interaction.isRepliable()) {
-                    await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true });
+                    await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 });
                 }
                 return;
             }
@@ -2247,7 +2247,7 @@ module.exports = {
             const rateCheck = checkFunctionRateLimit('onlyfans_fiqfuq', interaction.user.id);
             if (!rateCheck.allowed) {
                 if (interaction.isRepliable()) {
-                    await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, ephemeral: true });
+                    await interaction.reply({ content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`, flags: 64 });
                 }
                 return;
             }

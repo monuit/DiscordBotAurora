@@ -105,7 +105,7 @@ class CommandQueue {
                         if (!task.interaction.replied && !task.interaction.deferred) {
                             await task.interaction.reply({ 
                                 content: '❌ An error occurred while processing your command.', 
-                                ephemeral: true 
+                                flags: 64 
                             });
                         } else if (task.interaction.deferred && !task.interaction.replied) {
                             await task.interaction.editReply({ 

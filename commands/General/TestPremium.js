@@ -17,12 +17,12 @@ module.exports = {
                 
                 await interaction.reply({
                     embeds: [noPermEmbed],
-                    ephemeral: true
+                    flags: 64
                 });
                 return;
             }
 
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({ flags: 64 });
 
             // Use the bot's existing auto promo instance
             const autoPromo = client.autoPromo;
@@ -72,7 +72,7 @@ module.exports = {
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({
                     embeds: [errorEmbed],
-                    ephemeral: true
+                    flags: 64
                 });
             } else {
                 await interaction.editReply({ embeds: [errorEmbed] });

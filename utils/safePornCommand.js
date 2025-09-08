@@ -54,7 +54,7 @@ async function safePornCommand(interaction, commandFunction, commandName = 'Comm
             if (interaction.isRepliable() && !interaction.replied && interaction.deferred) {
                 await interaction.editReply({
                     content: `❌ An error occurred while processing the ${commandName.toLowerCase()} command.`,
-                    ephemeral: true
+                    flags: 64 
                 });
             }
         } catch (replyError) {

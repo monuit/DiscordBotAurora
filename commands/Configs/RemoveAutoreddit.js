@@ -5,7 +5,7 @@ module.exports = {
     name: ["remove", "autopost"],
     description: "Remove autopost configurations from your server",
     run: async (interaction, client) => {
-        await interaction.deferReply({ ephemeral: false });
+    await interaction.deferReply({ flags: 0 });
         
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
             const perm = new EmbedBuilder()

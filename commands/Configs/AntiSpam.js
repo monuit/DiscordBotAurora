@@ -28,11 +28,11 @@ module.exports = {
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
             return interaction.reply({
                 content: "❌ You need Administrator permissions to use this command.",
-                ephemeral: true
+                flags: 64
             });
         }
 
-        await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 });
 
         const action = interaction.options.getString("action");
         const targetUser = interaction.options.getString("user");

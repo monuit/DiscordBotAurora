@@ -14,7 +14,7 @@ module.exports = {
             if (!accessCheck.hasAccess) {
                 await interaction.reply({
                     embeds: [accessCheck.embed],
-                    ephemeral: true
+                    flags: 64
                 });
                 return;
             }
@@ -48,7 +48,7 @@ module.exports = {
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({
                     content: "❌ An error occurred while checking ping.",
-                    ephemeral: true
+                    flags: 64
                 }).catch(() => {});
             } else if (interaction.deferred) {
                 await interaction.editReply({

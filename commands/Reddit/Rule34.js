@@ -8,7 +8,7 @@ module.exports = {
     name: ["reddit", "rule34"],
     description: "get random rule34 porn",
     run: async (interaction, client, user, language) => {
-        await interaction.deferReply({ ephemeral: false });
+    await interaction.deferReply({ flags: 0 });
 
         if (!interaction.channel.nsfw) {
             interaction.reply({ embeds: [defaultNSFW(interaction)] })
@@ -51,7 +51,7 @@ module.exports = {
                         if (!i.member.permissions.has('Administrator')) {
                             return i.reply({
                                 content: '❌ Only administrators can request another one.',
-                                ephemeral: true
+                                flags: 64
                             });
                         }
                         try {

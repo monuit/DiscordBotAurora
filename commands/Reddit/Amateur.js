@@ -8,7 +8,7 @@ module.exports = {
     name: ["reddit", "amateur"],
     description: "get random amateur porn",
     run: async (interaction, client, user, language) => {
-        await interaction.deferReply({ ephemeral: false });
+    await interaction.deferReply({ flags: 0 });
 
         if (!interaction.channel.nsfw) {
             interaction.reply({ embeds: [defaultNSFW(interaction)] })
@@ -53,7 +53,7 @@ module.exports = {
                         if (!i.member.permissions.has('Administrator')) {
                             return i.reply({
                                 content: '❌ Only administrators can request another one.',
-                                ephemeral: true
+                                flags: 64
                             });
                         }
                         

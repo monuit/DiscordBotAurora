@@ -93,43 +93,32 @@ PostedContentSchema.statics.canPostContent = async function(url, source, categor
     const crypto = require('crypto');
     const urlHash = crypto.createHash('sha256').update(url).digest('hex');
     const now = new Date();
-    
+
     try {
-        // Check if this exact content was posted in the last 72 hours
+        // Check if this exact content was posted in the last 72 hours in ANY channel
         const recentPost = await this.findOne({
             urlHash: urlHash,
             availableAfter: { $gt: now }
         });
-        
+
         if (recentPost) {
-            // Content was posted recently, check if it was in the same channel
-            const channelPost = recentPost.lastPostedChannels.find(
-                channel => channel.channelId === channelId
-            );
-            
-            if (channelPost) {
-                // Posted in same channel within 72 hours
-                return {
-                    canPost: false,
-                    reason: 'duplicate_same_channel',
-                    lastPosted: channelPost.postedAt,
-                    availableAfter: recentPost.availableAfter
-                };
-            } else {
-                // Posted in different channel within 72 hours - still allow
-                return {
-                    canPost: true,
-                    reason: 'different_channel',
-                    existingPost: recentPost
-                };
-            }
+            // Content was posted recently in any channel
+            // Find the most recent channel and time
+            const lastChannel = recentPost.lastPostedChannels.length > 0 ? recentPost.lastPostedChannels[recentPost.lastPostedChannels.length - 1] : null;
+            return {
+                canPost: false,
+                reason: 'duplicate_cross_channel',
+                lastPosted: lastChannel ? lastChannel.postedAt : recentPost.postedAt,
+                lastChannelId: lastChannel ? lastChannel.channelId : recentPost.channelId,
+                availableAfter: recentPost.availableAfter
+            };
         }
-        
+
         return {
             canPost: true,
             reason: 'new_content'
         };
-        
+
     } catch (error) {
         console.error('[ContentTracker] Error checking content:', error);
         // In case of error, allow posting to avoid blocking

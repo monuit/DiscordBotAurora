@@ -9,7 +9,7 @@ const standardTemplate = async function(interaction, client, functionName, reque
             if (interaction.isRepliable()) {
                 await interaction.reply({
                     content: `⏱️ Please wait ${rateCheck.remaining} seconds before using this again.`,
-                    ephemeral: true
+                    flags: 64 
                 });
             }
             return;
@@ -58,7 +58,7 @@ const standardTemplate = async function(interaction, client, functionName, reque
                 } else if (interaction.isRepliable()) {
                     await interaction.reply({
                         content: "❌ An error occurred while processing your request.",
-                        ephemeral: true
+                        flags: 64 
                     });
                 }
             } catch (replyError) {

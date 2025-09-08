@@ -1,3 +1,8 @@
+Text/Media Level
+Which types of posts to send in this channel.
+Text Only - Send only posts containing exclusively text or links
+Media Only - Send only posts containing exclusively images/videos/gifs
+Both - Send posts containing any mix of media and text
 # Discord Bot Fixes Applied - COMPLETE
 
 ## ✅ ALL CRITICAL ISSUES RESOLVED

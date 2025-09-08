@@ -5,7 +5,7 @@ module.exports = {
     name: ["my-redeem"],
     description: "check your premium status (self-hosted)",
     run: async (interaction, client, language) => {
-        await interaction.deferReply({ ephemeral: false });
+    await interaction.deferReply({ flags: 0 });
         
         // Check if user is the owner
         const isOwner = interaction.user.id === process.env.OWNER_ID;

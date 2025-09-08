@@ -52,7 +52,7 @@ module.exports = async (client, interaction) => {
           // Send ephemeral error message that doesn't get auto-deleted
           return interaction.reply({
             content: `🚫 **Commands not allowed in this channel**\n\nBot commands are restricted to specific channels in this server.\nContact an administrator to add this channel to the allowed list.\n\nUse \`/manage channels\` (Administrator only) to configure channel permissions.`,
-            ephemeral: true
+            flags: 64
           });
         }
       }
@@ -132,7 +132,7 @@ module.exports = async (client, interaction) => {
         const missingNames = missingPermissions.map(perm => permNames[perm]).join(', ');
         return interaction.reply({
           content: `❌ I need these permissions: **${missingNames}**`,
-          ephemeral: true
+          flags: 64
         });
       }
 
@@ -143,12 +143,12 @@ module.exports = async (client, interaction) => {
         if (spamCheck.reason === 'muted') {
           return interaction.reply({
             content: `🔇 **You are temporarily muted!**\n\nYou've been detected spamming commands and are temporarily restricted.\n\n⏰ Time remaining: **${spamCheck.muteTime}s**\n\n*Please wait and try again later.*`,
-            ephemeral: true
+            flags: 64
           });
         } else if (spamCheck.reason === 'spam_detected') {
           return interaction.reply({
             content: `🚫 **Spam detected!**\n\nYou have been temporarily muted for **${Math.ceil(spamCheck.muteTime/60)} minutes** due to:\n📊 ${spamCheck.spamReason}\n\n*Please use commands responsibly.*`,
-            ephemeral: true
+            flags: 64
           });
         }
       }
@@ -168,7 +168,7 @@ module.exports = async (client, interaction) => {
           
           return interaction.reply({
             content: `⏳ **Command in use!**\n\nSomeone is already using the \`/${interaction.commandName}\` command on this server.\n\n⏰ Please wait **${waitingTime}s** and try again.`,
-            ephemeral: true
+            flags: 64
           });
         }
       }
@@ -245,7 +245,7 @@ module.exports = async (client, interaction) => {
           if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({
               content: "⏰ Command timed out. The bot may be experiencing high load. Please try again.",
-              ephemeral: true
+              flags: 64
             });
           } else if (interaction.deferred) {
             await interaction.editReply({
@@ -278,7 +278,7 @@ module.exports = async (client, interaction) => {
         if (!interaction.replied && !interaction.deferred) {
           await interaction.reply({ 
             content: `❌ Something went wrong while executing this command. Please try again later.`, 
-            ephemeral: true 
+            flags: 64 
           });
         } else if (interaction.deferred) {
           await interaction.editReply({ 

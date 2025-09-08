@@ -21,7 +21,7 @@ module.exports = {
 
     async run(interaction) {
         if (!interaction.replied && !interaction.deferred) {
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({ flags: 64 });
         }
 
         // Admin-only command

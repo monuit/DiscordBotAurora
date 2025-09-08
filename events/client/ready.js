@@ -33,6 +33,7 @@ module.exports = async (client) => {
     console.log(white('[') + green('Aurora') + white('] ') + green(`${client.guilds.cache.size}`) + white(` Guilds`));
     console.log(white('[') + green('INFO') + white('] ') + green(`${client.user.tag} (${client.user.id})`) + white(` is Ready!`));
 
+            // ...existing code...
 
     //update guild and users premium
     const users = await Premium.find();

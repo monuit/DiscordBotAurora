@@ -16,11 +16,11 @@ module.exports = {
             if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
                 return interaction.reply({
                     content: "❌ Only administrators can test the welcome DM system.",
-                    ephemeral: true
+                    flags: 64
                 });
             }
 
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({ flags: 64 });
 
             // Create the same embeds as the welcome DM
             const promoEmbed = new EmbedBuilder()

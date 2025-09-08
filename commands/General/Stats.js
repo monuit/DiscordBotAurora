@@ -8,14 +8,14 @@ module.exports = {
             return await
                 interaction.editReply({
                     content: `${interaction.user.username} I need this permissions to do this commands here (check permissions in this channel)\n\nPermissions\n'Send Messages'`,
-                    ephemeral: true
+                    flags: 64
                 })
         }
         if (!interaction.guild.members.me.permissions.has(PermissionsBitField.Flags.ViewChannel)) {
             return await
                 interaction.editReply({
                     content: `${interaction.user.username} I need this permissions to do this commands here (check permissions in this channel)\n\nPermissions\n'View Channels'`,
-                    ephemeral: true
+                    flags: 64
                 })
         }
 
@@ -23,7 +23,7 @@ module.exports = {
             return await
                 interaction.editReply({
                     content: `${interaction.user.username} I need this permissions to do this commands here (check permissions in this channel)\n\nPermissions\n'Embed Links'`,
-                    ephemeral: true
+                    flags: 64
                 })
         }
 

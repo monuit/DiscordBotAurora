@@ -1,4 +1,5 @@
 const { EmbedBuilder, WebhookClient, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const AutoPromoConfig = require('../settings/models/AutoPromoConfig');
 
 class AutoPromoSender {
     constructor(client) {
@@ -34,14 +35,21 @@ class AutoPromoSender {
      * Get promotional message content for role acquisition
      */
     getRolePromoMessage() {
-        return `||@everyone||\n\nYou can get the <@&${this.rolePromoConfig.roleId}> role for free by posting 3 reddit posts, please follow the steps:\nPick one option to get access:\n\n✅ **Option 1: Comment on Reddit**\n1. Search for posts with keywords like "nsfw discord", "onlyfans leaks", etc.\n2️. Comment under these posts with:\n👉 " They're here: https://discord.gg/fPge4RpbNZ\n3. Repeat on 10 recent/popular posts\n4. Send a screenshot to <@${this.rolePromoConfig.adminUserId}>\n\n**List of posts:**\nhttps://www.reddit.com/r/findaserver/comments/1h3gl7q/best_tiktok_leaks_discord_server/m3qkkxl/\nhttps://www.reddit.com/r/findaserver/comments/1dmjadn/best_nsfw_discord_server/\n\n✅ **Option 2: Post on Your Reddit Profile**\n1. Go to your Reddit profile and click Create a post\n2. Use a title from this list ➡️ https://pastelink.net/kqc0i660\n3. Add the Discord server link using the "URL" button (https://discord.gg/fPge4RpbNZ)\n4. Post 3 times on your profile\n5. Send a screenshot to <@${this.rolePromoConfig.adminUserId}>\n\n⚠️ **Don't use pastelink in your posts titles!** It's only useful for getting good titles for your posts when you open the pastelink on google!\n\n📩 Once verified, you get free access with the <@&${this.rolePromoConfig.roleId}> role! For any problems, directly DM <@${this.rolePromoConfig.modMailUserId}> (ModMail) and we'll answer your questions ASAP.`;
+    const extra = this.rolePromoConfig.extra || {};
+    const roleId = extra.roleId || this.rolePromoConfig.roleId || '1413584315912294690';
+    const adminUserId = extra.adminUserId || this.rolePromoConfig.adminUserId || '1016447789644910602';
+    const modMailUserId = extra.modMailUserId || this.rolePromoConfig.modMailUserId || '575252669443211264';
+    return `||@everyone||\n\nYou can get the <@&${roleId}> role for free by posting 3 reddit posts, please follow the steps:\nPick one option to get access:\n\n✅ **Option 1: Comment on Reddit**\n1. Search for posts with keywords like "nsfw discord", "onlyfans leaks", etc.\n2️. Comment under these posts with:\n👉 " They're here: https://discord.gg/fPge4RpbNZ\n3. Repeat on 10 recent/popular posts\n4. Send a screenshot to <@${adminUserId}>\n\n**List of posts:**\nhttps://www.reddit.com/r/findaserver/comments/1h3gl7q/best_tiktok_leaks_discord_server/m3qkkxl/\nhttps://www.reddit.com/r/findaserver/comments/1dmjadn/best_nsfw_discord_server/\n\n✅ **Option 2: Post on Your Reddit Profile**\n1. Go to your Reddit profile and click Create a post\n2. Use a title from this list ➡️ https://pastelink.net/kqc0i660\n3. Add the Discord server link using the "URL" button (https://discord.gg/fPge4RpbNZ)\n4. Post 3 times on your profile\n5. Send a screenshot to <@${adminUserId}>\n\n⚠️ **Don't use pastelink in your posts titles!** It's only useful for getting good titles for your posts when you open the pastelink on google!\n\n📩 Once verified, you get free access with the <@&${roleId}> role! For any problems, directly DM <@${modMailUserId}> (ModMail) and we'll answer your questions ASAP.`;
     }
 
     /**
      * Get promotional message content for premium content
      */
     getPremiumPromoMessage() {
-        return `**Welcome to Aurora!**\nㅤ\n**Providing Top quality leaks from all over the web with content added Daily!**\n\n**Once you pay, you will be added to the Content server automatically!**\n\n**》$50 - Aurora Lifetime (All content + NSFW)**\nAll packages displayed on our website\nExclusive N.S.F.W categories\nMassive amounts of Videos\nPreview: <#${this.premiumPromoConfig.previewChannelId}>\n\n**》$25- Exclusive leaks**\nVideos and pictures over 1000+ girls\nOver 200,000+ files\nOver 500GB of content and updated daily\nPreview: <#${this.premiumPromoConfig.previewChannelId}>\n\n**》$10.99- Snap leaks (Snapchat Leaks)**\nSnapchat leaks from 1000+ girls\nOver 200,000+ files\nOver 500GB of content and updated daily\nPreview: <#${this.premiumPromoConfig.previewChannelId}>\n\n**》$6.99 - Premium (OnlyFans Leaks)**\nOnlyfans leaks from 200+ girls\nOver 5TB of content\nCustom Requests\nNew mega folders\nPreview: <#${this.premiumPromoConfig.previewChannelId}>\n\n**Customer Reviews:** <#${this.premiumPromoConfig.reviewsChannelId}>\n\n**Click the link below to purchase! ⤵️**\n\nhttps://upgrade.chat/storeaurora`;
+    const extra = this.premiumPromoConfig.extra || {};
+    const previewChannelId = extra.previewChannelId || this.premiumPromoConfig.previewChannelId || '1413584598104932364';
+    const reviewsChannelId = extra.reviewsChannelId || this.premiumPromoConfig.reviewsChannelId || '1413584483990503484';
+    return `**Welcome to Aurora!**\nㅤ\n**Providing Top quality leaks from all over the web with content added Daily!**\n\n**Once you pay, you will be added to the Content server automatically!**\n\n**》$50 - Aurora Lifetime (All content + NSFW)**\nAll packages displayed on our website\nExclusive N.S.F.W categories\nMassive amounts of Videos\nPreview: <#${previewChannelId}>\n\n**》$25- Exclusive leaks**\nVideos and pictures over 1000+ girls\nOver 200,000+ files\nOver 500GB of content and updated daily\nPreview: <#${previewChannelId}>\n\n**》$10.99- Snap leaks (Snapchat Leaks)**\nSnapchat leaks from 1000+ girls\nOver 200,000+ files\nOver 500GB of content and updated daily\nPreview: <#${previewChannelId}>\n\n**》$6.99 - Premium (OnlyFans Leaks)**\nOnlyfans leaks from 200+ girls\nOver 5TB of content\nCustom Requests\nNew mega folders\nPreview: <#${previewChannelId}>\n\n**Customer Reviews:** <#${reviewsChannelId}>\n\n**Click the link below to purchase! ⤵️**\n\nhttps://upgrade.chat/storeaurora`;
     }
 
     /**
@@ -91,6 +99,18 @@ class AutoPromoSender {
 
             // Store the message ID for future deletion
             this.rolePromoConfig.lastMessageId = sentMessage.id;
+
+            // Persist lastSentAt and nextSendAt to DB
+            try {
+                const cfg = await AutoPromoConfig.findOne({ campaignType: 'role', channelId: this.rolePromoConfig.channelId });
+                if (cfg) {
+                    cfg.lastSentAt = new Date();
+                    cfg.nextSendAt = new Date(Date.now() + this.getRolePromoInterval());
+                    await cfg.save();
+                }
+            } catch (e) {
+                console.warn('[AutoPromo] Failed to persist role promo schedule to DB:', e.message);
+            }
 
             console.log(`[AutoPromo] Role promo message sent to ${channel.name} (${this.rolePromoConfig.channelId}) - Message ID: ${sentMessage.id}`);
             return true;
@@ -148,6 +168,18 @@ class AutoPromoSender {
 
             // Store the message ID for future deletion
             this.premiumPromoConfig.lastMessageId = sentMessage.id;
+
+            // Persist lastSentAt and nextSendAt to DB
+            try {
+                const cfg = await AutoPromoConfig.findOne({ campaignType: 'premium', channelId: this.premiumPromoConfig.channelId });
+                if (cfg) {
+                    cfg.lastSentAt = new Date();
+                    cfg.nextSendAt = new Date(Date.now() + this.getPremiumPromoInterval());
+                    await cfg.save();
+                }
+            } catch (e) {
+                console.warn('[AutoPromo] Failed to persist premium promo schedule to DB:', e.message);
+            }
 
             console.log(`[AutoPromo] Premium promo message sent to ${channel.name} (${this.premiumPromoConfig.channelId}) - Message ID: ${sentMessage.id}`);
             return true;
@@ -237,6 +269,12 @@ class AutoPromoSender {
      */
     async clearRolePromoMessages() {
         try {
+            // Safety: if destructive actions are disabled via env, skip cleanup
+            const safeMode = String(process.env.DISABLE_DESTRUCTIVE_ACTIONS || 'false').toLowerCase() === 'true';
+            if (safeMode) {
+                console.log('[AutoPromo] Skipping role promo cleanup because DISABLE_DESTRUCTIVE_ACTIONS is enabled');
+                return;
+            }
             const channel = await this.client.channels.fetch(this.rolePromoConfig.channelId);
             if (!channel) {
                 console.error(`[AutoPromo] Role promo channel ${this.rolePromoConfig.channelId} not found for cleanup`);
@@ -245,14 +283,18 @@ class AutoPromoSender {
 
             // Fetch recent messages and delete any promotional messages from the bot
             const messages = await channel.messages.fetch({ limit: 50 });
+            // Only target messages authored by the bot and matching the promo text
             const botMessages = messages.filter(msg => 
-                msg.author.id === this.client.user.id && 
-                msg.content.includes('You can get the') // Only delete role promo messages
+                msg.author && msg.author.id === this.client.user.id && 
+                msg.content && msg.content.includes('You can get the') // Only delete role promo messages
             );
             
             if (botMessages.size > 0) {
-                console.log(`[AutoPromo] Found ${botMessages.size} existing role promotional messages to clean up`);
-                for (const message of botMessages.values()) {
+                // Cap deletions per run to avoid runaway deletions
+                const MAX_DELETIONS = 20;
+                const toDelete = Array.from(botMessages.values()).slice(0, MAX_DELETIONS);
+                console.log(`[AutoPromo] Found ${botMessages.size} role promo messages; deleting up to ${toDelete.length} (cap: ${MAX_DELETIONS})`);
+                for (const message of toDelete) {
                     try {
                         await message.delete();
                         console.log(`[AutoPromo] Deleted existing role promotional message ${message.id}`);
@@ -262,8 +304,10 @@ class AutoPromoSender {
                         console.log(`[AutoPromo] Could not delete role promo message ${message.id}: ${error.message}`);
                     }
                 }
-                // Reset last message ID since we cleared everything
-                this.rolePromoConfig.lastMessageId = null;
+                // If we deleted any, reset the lastMessageId if it was among deleted
+                if (this.rolePromoConfig.lastMessageId && toDelete.find(m => m.id === this.rolePromoConfig.lastMessageId)) {
+                    this.rolePromoConfig.lastMessageId = null;
+                }
             }
         } catch (error) {
             console.error('[AutoPromo] Error during role promo message cleanup:', error);
@@ -275,6 +319,12 @@ class AutoPromoSender {
      */
     async clearPremiumPromoMessages() {
         try {
+            // Safety: skip cleanup if destructive actions disabled
+            const safeMode = String(process.env.DISABLE_DESTRUCTIVE_ACTIONS || 'false').toLowerCase() === 'true';
+            if (safeMode) {
+                console.log('[AutoPromo] Skipping premium promo cleanup because DISABLE_DESTRUCTIVE_ACTIONS is enabled');
+                return;
+            }
             const channel = await this.client.channels.fetch(this.premiumPromoConfig.channelId);
             if (!channel) {
                 console.error(`[AutoPromo] Premium promo channel ${this.premiumPromoConfig.channelId} not found for cleanup`);
@@ -284,13 +334,15 @@ class AutoPromoSender {
             // Fetch recent messages and delete any promotional messages from the bot
             const messages = await channel.messages.fetch({ limit: 50 });
             const botMessages = messages.filter(msg => 
-                msg.author.id === this.client.user.id && 
-                msg.content.includes('Welcome to Aurora!') // Only delete premium promo messages
+                msg.author && msg.author.id === this.client.user.id && 
+                msg.content && msg.content.includes('Welcome to Aurora!') // Only delete premium promo messages
             );
             
             if (botMessages.size > 0) {
-                console.log(`[AutoPromo] Found ${botMessages.size} existing premium promotional messages to clean up`);
-                for (const message of botMessages.values()) {
+                const MAX_DELETIONS = 20;
+                const toDelete = Array.from(botMessages.values()).slice(0, MAX_DELETIONS);
+                console.log(`[AutoPromo] Found ${botMessages.size} premium promo messages; deleting up to ${toDelete.length} (cap: ${MAX_DELETIONS})`);
+                for (const message of toDelete) {
                     try {
                         await message.delete();
                         console.log(`[AutoPromo] Deleted existing premium promotional message ${message.id}`);
@@ -300,8 +352,9 @@ class AutoPromoSender {
                         console.log(`[AutoPromo] Could not delete premium promo message ${message.id}: ${error.message}`);
                     }
                 }
-                // Reset last message ID since we cleared everything
-                this.premiumPromoConfig.lastMessageId = null;
+                if (this.premiumPromoConfig.lastMessageId && toDelete.find(m => m.id === this.premiumPromoConfig.lastMessageId)) {
+                    this.premiumPromoConfig.lastMessageId = null;
+                }
             }
         } catch (error) {
             console.error('[AutoPromo] Error during premium promo message cleanup:', error);
@@ -323,35 +376,69 @@ class AutoPromoSender {
             console.log('[AutoPromo] Auto-promotional system is already running');
             return;
         }
-
         console.log('[AutoPromo] Starting auto-promotional system');
-        
-        // Clear any existing messages before starting and wait for completion
-        await this.clearRolePromoMessages();
-        await this.clearPremiumPromoMessages();
-        
-        // Start both promotional systems
-        if (!this.rolePromoConfig.isRunning) {
-            this.rolePromoConfig.isRunning = true;
-            
-            // Send initial role promo message immediately
-            console.log('[AutoPromo] Sending initial role promotional message');
+
+        // Ensure DB records exist and load scheduling state
+        await AutoPromoConfig.findOneAndUpdate(
+            { campaignType: 'role', channelId: this.rolePromoConfig.channelId },
+            { $setOnInsert: { extra: {}, isRunning: true } },
+            { upsert: true, new: true }
+        );
+        await AutoPromoConfig.findOneAndUpdate(
+            { campaignType: 'premium', channelId: this.premiumPromoConfig.channelId },
+            { $setOnInsert: { extra: {}, isRunning: true } },
+            { upsert: true, new: true }
+        );
+
+        // By default, do NOT clear or re-send promotional messages on startup.
+        // This prevents the bot from immediately re-sending promos after a restart.
+        // Set AUTOPROMO_CLEANUP_ON_START=true in the environment to opt in to cleanup behavior.
+        const cleanupOnStart = String(process.env.AUTOPROMO_CLEANUP_ON_START || 'false').toLowerCase() === 'true';
+        if (cleanupOnStart) {
+            console.log('[AutoPromo] AUTOPROMO_CLEANUP_ON_START=true — performing promo cleanup on start');
+            await this.clearRolePromoMessages();
+            await this.clearPremiumPromoMessages();
+        } else {
+            console.log('[AutoPromo] Skipping promo cleanup on start to avoid accidental re-sends (enable AUTOPROMO_CLEANUP_ON_START to change)');
+        }
+
+        // Start role promo system: load DB state and schedule (do NOT send immediately on restart)
+        this.rolePromoConfig.isRunning = true;
+        const roleCfg = await AutoPromoConfig.findOne({ campaignType: 'role', channelId: this.rolePromoConfig.channelId });
+        if (!roleCfg.nextSendAt) {
+            // First-time setup: schedule next send in the future (do not send immediately)
+            roleCfg.nextSendAt = new Date(Date.now() + this.getRolePromoInterval());
+            await roleCfg.save();
+        }
+        // If the saved nextSendAt is in the past (e.g., downtime), move it to a future slot to avoid immediate send on restart
+        if (roleCfg.nextSendAt && roleCfg.nextSendAt.getTime() <= Date.now()) {
+            roleCfg.nextSendAt = new Date(Date.now() + this.getRolePromoInterval());
+            await roleCfg.save();
+            console.log('[AutoPromo] nextSendAt was in the past — deferred next send to', roleCfg.nextSendAt.toISOString());
+        }
+        this.rolePromoConfig.timeoutId = setTimeout(async () => {
             await this.sendRolePromoMessage();
-            
-            // Then schedule the next one
+            // after send, schedule next
             this.scheduleRolePromoNext();
+        }, Math.max(0, roleCfg.nextSendAt.getTime() - Date.now()));
+
+        // Start premium promo system: load DB state and schedule (do NOT send immediately on restart)
+        this.premiumPromoConfig.isRunning = true;
+        const premCfg = await AutoPromoConfig.findOne({ campaignType: 'premium', channelId: this.premiumPromoConfig.channelId });
+        if (!premCfg.nextSendAt) {
+            premCfg.nextSendAt = new Date(Date.now() + this.getPremiumPromoInterval());
+            await premCfg.save();
         }
-        
-        if (!this.premiumPromoConfig.isRunning) {
-            this.premiumPromoConfig.isRunning = true;
-            
-            // Send initial premium promo message immediately
-            console.log('[AutoPromo] Sending initial premium promotional message');
+        // Avoid immediate sends when nextSendAt is in the past
+        if (premCfg.nextSendAt && premCfg.nextSendAt.getTime() <= Date.now()) {
+            premCfg.nextSendAt = new Date(Date.now() + this.getPremiumPromoInterval());
+            await premCfg.save();
+            console.log('[AutoPromo] premium nextSendAt was in the past — deferred next send to', premCfg.nextSendAt.toISOString());
+        }
+        this.premiumPromoConfig.timeoutId = setTimeout(async () => {
             await this.sendPremiumPromoMessage();
-            
-            // Then schedule the next one
             this.schedulePremiumPromoNext();
-        }
+        }, Math.max(0, premCfg.nextSendAt.getTime() - Date.now()));
     }
 
     /**

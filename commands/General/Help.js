@@ -10,7 +10,7 @@ module.exports = {
         if (!accessCheck.hasAccess) {
             await interaction.reply({
                 embeds: [accessCheck.embed],
-                ephemeral: true
+                flags: 64
             });
             return;
         }
@@ -75,7 +75,7 @@ module.exports = {
 
         const replyOptions = { 
             embeds: [embed],
-            ephemeral: true  // Make the response only visible to the user
+            flags: 64  // Make the response only visible to the user
         };
         
         // Only add components if we have buttons

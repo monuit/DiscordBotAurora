@@ -56,7 +56,7 @@ module.exports = {
     run: async (interaction, client) => {
         // Only defer if not already replied to
         if (!interaction.replied && !interaction.deferred) {
-            await interaction.deferReply({ ephemeral: false });
+            await interaction.deferReply({ flags: 0 });
         }
 
         // Check permissions

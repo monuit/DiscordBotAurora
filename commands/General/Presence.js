@@ -16,11 +16,11 @@ module.exports = {
             if (interaction.user.id !== client.owner) {
                 return interaction.reply({
                     content: "❌ Only the bot owner can manage presence settings.",
-                    ephemeral: true
+                    flags: 64
                 });
             }
 
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({ flags: 64 });
 
             if (!client.presenceRotation) {
                 return interaction.editReply({

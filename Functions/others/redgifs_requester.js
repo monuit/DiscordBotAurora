@@ -13,6 +13,18 @@ class RedgifsRequester {
             'rough', 'squirting', 'threesome', 'webcam', 'asian', 'ebony', 'latina',
             'redhead', 'blonde', 'brunette', 'bbw', 'petite', 'mature', 'young'
         ];
+        // synonyms to broaden search terms for certain categories
+        this.synonyms = {
+            'blowjob': ['bj', 'blow job'],
+            'milf': ['cougar', 'mature'],
+            'teen': ['young'],
+            'anal': ['butt', 'rear'],
+            'lesbian': ['girls', 'lez'],
+            'amateur': ['homemade', 'home'],
+            'threesome': ['3some', 'ménage'],
+            'squirting': ['squirt'],
+            'hardcore': ['intense']
+        };
     }
 
     /**
@@ -53,7 +65,19 @@ class RedgifsRequester {
         }
 
         try {
-            const response = await axios.get(this.searchUrl, {
+            // If synonyms exist for this category, perform multiple searches and merge results
+            const toFetch = [];
+            const mainCount = Math.max(Math.floor(count * 0.7), 10);
+            toFetch.push({ text: category, count: mainCount });
+            const syns = this.synonyms[String(category).toLowerCase()];
+            if (syns && syns.length) {
+                const rem = Math.max(count - mainCount, 10);
+                const perSyn = Math.max(Math.floor(rem / syns.length), 6);
+                for (const s of syns) toFetch.push({ text: s, count: perSyn });
+            }
+
+            // perform requests in parallel (but limited by axios/Promise.all)
+            const promises = toFetch.map(q => axios.get(this.searchUrl, {
                 headers: {
                     'User-Agent': this.userAgent,
                     'Accept': 'application/json',
@@ -62,15 +86,31 @@ class RedgifsRequester {
                     'Origin': 'https://www.redgifs.com'
                 },
                 params: {
-                    search_text: category,
+                    search_text: q.text,
                     order: 'trending',
-                    count: count,
+                    count: q.count,
                     page: 1
                 }
-            });
+            }).catch(err => ({ data: { gifs: [] } })));
 
-            if (response.data && response.data.gifs) {
-                return response.data.gifs.map(gif => ({
+            const responses = await Promise.all(promises);
+            const all = [];
+            for (const response of responses) {
+                if (response.data && response.data.gifs) {
+                    for (const gif of response.data.gifs) {
+                        all.push(gif);
+                    }
+                }
+            }
+
+            // unique by id
+            const seen = new Set();
+            const out = [];
+            for (const gif of all) {
+                if (!gif || !gif.id) continue;
+                if (seen.has(gif.id)) continue;
+                seen.add(gif.id);
+                out.push({
                     id: gif.id,
                     title: gif.caption || `${category} content`,
                     url: gif.urls?.hd || gif.urls?.sd || gif.urls?.webm,
@@ -81,19 +121,18 @@ class RedgifsRequester {
                     tags: gif.tags || [category],
                     source: 'redgifs',
                     category: category
-                }));
+                });
+                if (out.length >= count) break;
             }
-            return [];
+
+            return out;
         } catch (error) {
             console.error(`[Redgifs] Error searching for ${category}:`, error.message);
-            
-            // If auth error, try to refresh token
             if (error.response?.status === 401) {
                 console.log('[Redgifs] Token expired, refreshing...');
                 this.authToken = null;
                 return await this.searchGifs(category, count);
             }
-            
             return [];
         }
     }
@@ -125,6 +164,41 @@ class RedgifsRequester {
         } catch (error) {
             console.error(`[Redgifs] Error getting random ${category} content:`, error.message);
             throw error;
+        }
+    }
+
+    /**
+     * Get a batch of random content items for prefetching
+     * Returns an array of objects compatible with getRandomContent's return shape
+     */
+    async getRandomBatch(category, count = 5) {
+        try {
+            // fetch a larger set and pick random unique items
+            const fetchCount = Math.max(count, 40);
+            const gifs = await this.searchGifs(category, fetchCount);
+            if (!gifs || gifs.length === 0) return [];
+
+            // shuffle gifs
+            for (let i = gifs.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [gifs[i], gifs[j]] = [gifs[j], gifs[i]];
+            }
+
+            const selected = gifs.slice(0, Math.min(count, gifs.length));
+
+            return selected.map(gif => ({
+                title: gif.title,
+                url: gif.url,
+                thumbnail: gif.thumbnail,
+                description: null,
+                footer: `Source: Redgifs • Category: ${category}`,
+                color: '#ff6b6b',
+                tags: gif.tags,
+                source: 'redgifs'
+            }));
+        } catch (error) {
+            console.error(`[Redgifs] Error getting batch for ${category}:`, error.message);
+            return [];
         }
     }
 
